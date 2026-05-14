@@ -1,5 +1,7 @@
 # QMT Data API
 
+将 QMT 主机作为中转，获取最新数据，并通过受控 API 提供给其他电脑使用。
+
 This repository is intended for building a QMT/xtquant data gateway that runs on the machine bound to QMT and exposes controlled APIs for other machines.
 
 ## Git Workflow
