@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent 运行规范"
+  short_description: "本仓库通用执行规范，覆盖 Git、编码、安全与验证流程。"
+  default_prompt: "Use $agent-run-rules to read and follow the repository rules before starting this task."
