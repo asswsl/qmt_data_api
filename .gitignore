@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local config and secrets
+.env
+.env.*
+*.key
+*.pem
+secrets.*
+
+# Logs and runtime artifacts
+logs/
+*.log
+*.pid
+
+# Data/cache generated from QMT or gateway runs
+data/
+cache/
+*.db
+*.sqlite
+*.sqlite3
+*.parquet
+*.feather
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
