@@ -1,0 +1,20 @@
+app:
+  env: local
+  host: 127.0.0.1
+  port: 8000
+  api_prefix: /api/v1
+
+qmt:
+  enable_trade_api: false
+  enable_real_order: false
+  mini_qmt_path: ""
+
+cache:
+  backend: memory
+  data_dir: data
+  ttl_snapshot_seconds: 3
+  ttl_history_seconds: 3600
+
+security:
+  api_key_enabled: true
+  allowed_ips: []

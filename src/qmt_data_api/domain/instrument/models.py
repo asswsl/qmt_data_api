@@ -1,0 +1,1 @@
+"""Instrument domain models placeholder."""

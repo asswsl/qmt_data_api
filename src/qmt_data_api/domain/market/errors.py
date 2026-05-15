@@ -1,0 +1,1 @@
+"""Market domain errors placeholder."""

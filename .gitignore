@@ -16,23 +16,48 @@ env/
 # Local config and secrets
 .env
 .env.*
+!.env.example
+configs/*.local.*
+configs/app.yaml
+configs/logging.yaml
+configs/permissions.yaml
 *.key
 *.pem
+*.pfx
+*.token
 secrets.*
 
 # Logs and runtime artifacts
-logs/
+logs/**
+!logs/
+!logs/**/
+!logs/README.md
+!logs/**/.gitkeep
+var/**
+!var/
+!var/**/
+!var/README.md
+!var/**/.gitkeep
 *.log
 *.pid
 
 # Data/cache generated from QMT or gateway runs
-data/
-cache/
+data/**
+!data/
+!data/**/
+!data/README.md
+!data/**/.gitkeep
+/cache/
 *.db
 *.sqlite
 *.sqlite3
 *.parquet
 *.feather
+*.h5
+*.csv
+*.jsonl
+*.zip
+*.7z
 
 # OS/editor
 .DS_Store

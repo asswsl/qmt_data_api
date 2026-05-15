@@ -1,0 +1,8 @@
+keys:
+  - name: local-dev
+    key: change-me
+    scopes:
+      - market:read
+      - instrument:read
+      - system:read
+      - ws:subscribe

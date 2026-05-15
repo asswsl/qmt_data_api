@@ -6,6 +6,8 @@
 
 ### Changed
 
+- 生成项目总目录骨架，包含 `src/qmt_data_api/` 后端包结构、配置模板、脚本目录、测试目录、运行期目录说明、Windows 打包模板和项目结构文档。
+- 更新 `.gitignore`，允许提交运行期目录说明文件和 `.gitkeep`，继续排除真实数据、缓存、日志、运行状态、密钥和本地配置。
 - 新增 `docs/system-requirements-and-api.md`，沉淀 QMT Data API 的系统需求分析、功能优先级、模块规划、接口格式、错误码、缓存策略和落地路线。
 - 新增 agent 运行规范要求：每次变更后必须同步更新 `CHANGELOG.md`。
 - 新增文档变更处理规则：仅文档、说明、规范或注释类变更暂不推送分支、不创建或更新 PR，等待后续代码变更时一并推送和提交 PR。
@@ -14,3 +16,4 @@
 
 - 已执行 UTF-8 严格解码检查。
 - 已执行 `git diff --check`，未发现空白错误。
+- 已执行 `python -m compileall -q src`，项目骨架 Python 文件语法检查通过。

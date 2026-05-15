@@ -1,0 +1,1 @@
+"""Shared enum definitions placeholder."""

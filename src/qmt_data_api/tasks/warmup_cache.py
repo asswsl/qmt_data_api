@@ -1,0 +1,1 @@
+"""Cache warmup task placeholder."""
