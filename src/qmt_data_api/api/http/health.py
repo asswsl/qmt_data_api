@@ -1,3 +1,4 @@
+# 提供健康检查和服务状态接口。
 """Health and readiness routes."""
 
 from fastapi import APIRouter

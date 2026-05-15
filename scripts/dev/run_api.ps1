@@ -1,3 +1,4 @@
+# 启动本地开发 API 服务。
 param(
     [string]$HostName = "127.0.0.1",
     [int]$Port = 8000

@@ -1,3 +1,4 @@
+# 创建并配置 FastAPI 应用实例。
 """FastAPI application factory."""
 
 from fastapi import FastAPI

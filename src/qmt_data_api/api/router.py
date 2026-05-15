@@ -1,3 +1,4 @@
+# 聚合 QMT Data API 顶层路由。
 """Top-level API router."""
 
 from fastapi import APIRouter
