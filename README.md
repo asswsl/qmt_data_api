@@ -1,17 +1,123 @@
 # QMT Data API
 
-将 QMT 主机作为中转，获取最新数据，并通过受控 API 提供给其他电脑使用。
+将绑定 QMT 的主机作为数据网关，统一获取迅投 QMT / xtquant 数据，并通过受控接口提供给其他电脑、策略服务或研究工具使用。
 
-This repository is intended for building a QMT/xtquant data gateway that runs on the machine bound to QMT and exposes controlled APIs for other machines.
+## 项目目标
 
-## Git Workflow
+QMT 数据通常依赖已绑定、已登录的本机环境。这个项目的目标是把这台主机抽象成一个稳定的数据中转服务：
 
-All changes should follow a branch-based workflow:
+- 在 QMT 主机本地连接 MiniQMT、`xtdata` 和后续可能的 `xttrader`。
+- 对外提供 HTTP、WebSocket 或后续 gRPC 接口。
+- 让其他电脑无需安装或绑定 QMT，也能通过标准接口访问数据。
+- 对历史数据、实时行情、基础信息和任务状态做缓存、落盘与审计。
+- 在引入交易能力前，优先把只读数据网关做稳定。
 
-1. Start from `main`.
-2. Create a feature branch for each change.
-3. Commit only reviewed, intentional files.
-4. Push the branch to the remote repository.
-5. Open a pull request for review and merge.
+## 推荐架构
 
-Large local market data, cache files, logs, credentials, and QMT runtime artifacts should stay out of Git.
+```text
+其他电脑 / 策略机 / 研究机
+        |
+ HTTP / WebSocket / gRPC
+        |
+QMT Data Gateway
+        |
+xtquant.xtdata / xtquant.xttrader
+        |
+本机 MiniQMT / QMT 客户端
+```
+
+网关服务只运行在绑定 QMT 的主机上。外部调用方只访问网关定义好的接口，不直接调用 QMT 原生能力。
+
+## 建设阶段
+
+### 第一阶段：内网只读数据网关
+
+- 健康检查：QMT 是否运行、连接是否正常、最近数据时间。
+- 行情快照：按股票代码批量获取最新行情。
+- 历史 K 线：按股票、周期、时间范围查询。
+- 基础信息：股票列表、合约信息、交易日历等。
+- 本地缓存：内存缓存最新行情，Parquet/SQLite 保存历史数据。
+- 简单鉴权：API Key、IP 白名单、接口限流。
+
+### 第二阶段：实时推送与异步任务
+
+- WebSocket 实时行情订阅。
+- 多客户端订阅合并，避免重复压 QMT。
+- 历史数据补全任务。
+- 任务状态查询、失败重试、断点续跑。
+- 日志、监控、盘前自检、盘后备份。
+
+### 第三阶段：账户与交易能力
+
+交易能力默认关闭，只有在数据网关稳定后再逐步启用：
+
+- 账户、资产、持仓、委托、成交只读查询。
+- 下单、撤单接口单独鉴权。
+- `client_order_id` 幂等控制。
+- 下单前风控、黑白名单、金额限制。
+- 全量审计日志和一键熔断。
+
+## 接口草案
+
+```text
+GET  /api/v1/health
+GET  /api/v1/status/qmt
+GET  /api/v1/market/snapshot?symbols=600519.SH,000001.SZ
+GET  /api/v1/market/kline?symbol=600519.SH&period=1d&start=20200101&end=20260514
+GET  /api/v1/market/instruments
+POST /api/v1/jobs/history-sync
+GET  /api/v1/jobs/{job_id}
+WS   /ws/market
+```
+
+交易相关接口应放在独立命名空间，例如 `/api/v1/trade/*`，并使用更严格的权限和审计策略。
+
+## 数据与缓存原则
+
+不要让每个外部请求都直接穿透到 QMT。建议分层处理：
+
+- 实时行情：进程内缓存，短 TTL。
+- 历史 K 线：本地 Parquet 分区存储。
+- 元数据与任务：SQLite 起步，后续可迁移 PostgreSQL。
+- 热点查询：按需要引入 Redis。
+- 日志审计：按日期滚动，交易相关日志长期保存。
+
+大型行情数据、缓存、数据库、日志和 QMT 本地运行文件不要提交到 Git。
+
+## 安全原则
+
+- 默认只开放内网访问。
+- 不直接暴露 QMT 原始端口或原生函数。
+- 不提交密钥、账号、token、证书或 `.env` 文件。
+- 公网访问优先使用 VPN、Tailscale、ZeroTier 或 WireGuard。
+- 管理接口和交易接口必须单独鉴权。
+- 交易接口默认关闭，启用前必须具备风控、审计和熔断。
+
+## 仓库规范
+
+本仓库包含 agent 运行规范。每次 agent 开始任务前，应先读取：
+
+```text
+AGENTS.md
+skills/agent-run-rules/SKILL.md
+```
+
+该规范定义了中文沟通、UTF-8 编码、Git 分支、PR 流程、安全边界和验证标准。
+
+## Git 工作流
+
+所有变更都应遵循分支与 PR 流程：
+
+1. 从最新 `main` 开始。
+2. 为每个任务创建独立分支。
+3. 只提交与当前任务直接相关的文件。
+4. 运行必要验证。
+5. 推送功能分支。
+6. 创建 Pull Request。
+7. 通过 PR 合并回 `main`。
+
+除仓库初始化、远端修复等维护动作外，不直接向 `main` 推送功能变更。
+
+## 当前状态
+
+项目目前处于规划与基础规范阶段。优先事项是完善网关设计、目录结构、只读数据接口和本地缓存策略，再逐步实现服务化代码。
