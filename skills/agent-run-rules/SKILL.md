@@ -40,7 +40,7 @@ description: 通用代理运行规范。每次 Codex 或其他 agent 在本仓�
 3. 从 `main` 创建语义清晰的分支，例如 `feature/add-qmt-gateway-api`、`fix/history-cache-bug`、`docs/update-runbook`。
 4. 每次出现变更后，都要同步更新根目录 `CHANGELOG.md`，记录日期、变更类型、摘要和验证情况。
 5. 每次提交只包含与当前任务直接相关的文件。
-6. 提交信息使用简洁英文 Conventional Commit 风格，例如 `feat: add market snapshot api`。
+6. Git 相关操作说明必须使用中文，包括提交标题、提交正文、PR 标题、PR 描述、PR 评论和合并说明；提交信息保持简洁，可使用中文类型前缀，例如 `功能：新增行情快照接口`、`文档：更新接口规划`、`修复：处理缓存缺失错误`。
 7. 推送功能分支到远端。
 8. 创建 PR，PR 描述包含变更摘要、验证结果和风险说明。
 
@@ -106,13 +106,13 @@ description: 通用代理运行规范。每次 Codex 或其他 agent 在本仓�
 创建 PR 时使用以下结构：
 
 ```markdown
-## Summary
+## 摘要
 -
 
-## Validation
+## 验证
 -
 
-## Risk
+## 风险
 -
 ```
 

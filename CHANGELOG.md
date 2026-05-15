@@ -2,6 +2,18 @@
 
 本文件记录本仓库的重要变更。每次 agent 完成变更后，都应同步更新此文件。
 
+## 2026-05-15
+
+### Changed
+
+- 更新 agent 运行规范，要求 Git 提交信息、提交正文、PR 标题、PR 描述、PR 评论和合并说明均使用中文。
+- 更新 PR 描述模板，将 `Summary`、`Validation`、`Risk` 改为中文标题。
+
+### Validation
+
+- 已执行 UTF-8 严格解码检查。
+- 已执行 `git diff --check`，未发现空白错误。
+
 ## 2026-05-14
 
 ### Changed
