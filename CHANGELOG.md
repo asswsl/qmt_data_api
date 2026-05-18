@@ -6,6 +6,10 @@
 
 ### Changed
 
+- 新增行情快照只读接口，支持 `GET /api/v1/market/snapshot` 和 `POST /api/v1/market/snapshot`。
+- 新增证券代码规范化、行情快照领域服务、xtdata 快照适配和原始字段映射。
+- 新增行情快照参数校验，覆盖非法证券代码、请求数量超限、缺失数据和 API Key 鉴权。
+- 新增行情快照单元测试与集成测试。
 - 新增 agent 运行规范：每次完整实现功能后必须更新功能文档；若为 API 接口，必须记录请求方法、路径、鉴权要求、请求参数和响应格式。
 - 新增 `docs/features.md`，记录已完整实现的只读 API 基础骨架、健康检查接口、系统状态接口、QMT 状态探测接口和 API Key 鉴权。
 - 实现第一步最小可运行只读 API 骨架，包括配置加载、统一响应、应用错误码、请求 ID 中间件、API Key 鉴权和统一异常处理。
@@ -17,6 +21,8 @@
 ### Validation
 
 - 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
+- 已执行 `python -m pytest`，11 项测试全部通过。
+- 已执行真实主机行情快照探测：`get_market_snapshots(["600519.SH"])` 返回可用快照数据。
 - 已执行 `python -m pytest tests/unit/test_config.py tests/integration/test_api.py`，5 项测试全部通过。
 - 已执行真实主机探测：`probe_xtdata_status()` 返回已连接状态，当前本机 QMT 数据链路可用。
 - 已检查本次新增与修改的代码文件首行中文说明。

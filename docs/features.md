@@ -4,6 +4,108 @@
 
 ## 2026-05-18
 
+### 行情快照接口
+
+实现范围：
+
+- 已实现证券代码规范化和去重，支持 `600519.SH`、`000001.SZ`、`430047.BJ` 这类六位代码加市场后缀格式。
+- 已实现单次请求数量限制，默认最多 200 个证券代码，可通过环境变量 `MARKET_SNAPSHOT_MAX_SYMBOLS` 调整。
+- 已实现 xtdata 行情快照适配，底层调用 `xtdata.get_full_tick(symbols)`。
+- 已实现 QMT 原始字段映射，输出 `last_price`、`pre_close`、`open`、`high`、`low`、`volume`、`amount`、`bid1`、`ask1` 等稳定字段。
+- 已实现缺失证券列表 `missing_symbols`，单个证券缺失不会导致整个请求失败。
+- 已实现 GET 和 POST 两种调用方式。
+
+验证结果：
+
+- `python -m compileall -q src tests` 通过。
+- `python -m pytest tests/unit/test_config.py tests/unit/test_market_service.py tests/integration/test_api.py` 通过，11 项测试全部通过。
+- 已执行真实 `get_market_snapshots(["600519.SH"])` 探测，本机 QMT 返回可用行情快照。
+
+GET 接口格式：
+
+```http
+GET /api/v1/market/snapshot?symbols=600519.SH,000001.SZ&fields=last_price,volume
+```
+
+POST 接口格式：
+
+```http
+POST /api/v1/market/snapshot
+Content-Type: application/json
+```
+
+鉴权要求：
+
+- 需要请求头：`X-API-Key: <api-key>`。
+- 可选请求头：`X-Request-ID: <request-id>`。
+
+GET 请求参数：
+
+```text
+symbols  必填，逗号分隔的证券代码列表，例如 600519.SH,000001.SZ
+fields   可选，逗号分隔的字段列表，例如 last_price,volume
+```
+
+POST 请求体：
+
+```json
+{
+  "symbols": ["600519.SH", "000001.SZ"],
+  "fields": ["last_price", "volume"]
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": [
+    {
+      "symbol": "600519.SH",
+      "quote_time": "2026-05-18T10:38:56+08:00",
+      "last_price": 1328.5,
+      "pre_close": 1332.95,
+      "open": 1336.0,
+      "high": 1342.68,
+      "low": 1325.57,
+      "volume": 22930.0,
+      "amount": 3057433600.0,
+      "bid1": 1328.5,
+      "bid1_volume": 11.0,
+      "ask1": 1328.55,
+      "ask1_volume": 4.0
+    }
+  ],
+  "meta": {
+    "server_time": "2026-05-18T10:38:56+08:00",
+    "missing_symbols": [],
+    "fields": ["last_price", "volume"]
+  }
+}
+```
+
+错误响应：
+
+```json
+{
+  "success": false,
+  "code": "INVALID_SYMBOL",
+  "message": "证券代码格式错误",
+  "request_id": "req_xxx",
+  "data": {
+    "symbols": ["BAD-SYMBOL"]
+  },
+  "meta": {
+    "retryable": false,
+    "server_time": "2026-05-18T10:38:56+08:00"
+  }
+}
+```
+
 ### 只读 API 基础骨架
 
 实现范围：

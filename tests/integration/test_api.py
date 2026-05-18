@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from qmt_data_api.app import create_app
 from qmt_data_api.core.config import clear_settings_cache
 from qmt_data_api.core.errors import ErrorCode, QmtError
+from qmt_data_api.domain.market.schemas import SnapshotItem, SnapshotResult
 
 
 def _build_client(monkeypatch) -> TestClient:
@@ -84,3 +85,74 @@ def test_status_summary_degrades_when_qmt_probe_fails(monkeypatch) -> None:
     payload = response.json()
     assert payload["data"]["status"] == "degraded"
     assert payload["data"]["qmt"]["code"] == ErrorCode.QMT_XTDATA_UNAVAILABLE
+
+
+def test_market_snapshot_requires_api_key(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    response = client.get("/api/v1/market/snapshot?symbols=600519.SH")
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    assert response.json()["code"] == ErrorCode.AUTH_MISSING_API_KEY
+
+
+def test_market_snapshot_get_returns_data(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    def _fake_snapshots(symbols: list[str], fields: list[str] | None = None) -> SnapshotResult:
+        assert symbols == ["600519.SH", "000001.SZ"]
+        assert fields == ["last_price", "volume"]
+        return SnapshotResult(
+            items=[
+                SnapshotItem(
+                    symbol="600519.SH",
+                    quote_time="2026-05-18T10:00:00+08:00",
+                    last_price=1688.88,
+                    volume=1000,
+                    raw={"lastPrice": 1688.88},
+                )
+            ],
+            missing_symbols=["000001.SZ"],
+            fields=fields,
+        )
+
+    monkeypatch.setattr("qmt_data_api.api.http.market.get_market_snapshots", _fake_snapshots)
+
+    response = client.get(
+        "/api/v1/market/snapshot?symbols=600519.SH,000001.SZ&fields=last_price,volume",
+        headers={"X-API-Key": "secret-key"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"][0]["symbol"] == "600519.SH"
+    assert payload["data"][0]["last_price"] == 1688.88
+    assert "raw" not in payload["data"][0]
+    assert payload["meta"]["missing_symbols"] == ["000001.SZ"]
+
+
+def test_market_snapshot_post_returns_data(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    def _fake_snapshots(symbols: list[str], fields: list[str] | None = None) -> SnapshotResult:
+        assert symbols == ["600519.SH"]
+        assert fields == ["last_price"]
+        return SnapshotResult(
+            items=[SnapshotItem(symbol="600519.SH", last_price=1688.88)],
+            missing_symbols=[],
+            fields=fields,
+        )
+
+    monkeypatch.setattr("qmt_data_api.api.http.market.get_market_snapshots", _fake_snapshots)
+
+    response = client.post(
+        "/api/v1/market/snapshot",
+        headers={"X-API-Key": "secret-key"},
+        json={"symbols": ["600519.SH"], "fields": ["last_price"]},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert payload["data"] == [{"symbol": "600519.SH", "last_price": 1688.88}]
+    assert payload["meta"]["fields"] == ["last_price"]

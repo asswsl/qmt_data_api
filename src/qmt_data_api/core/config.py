@@ -31,6 +31,7 @@ class Settings:
     log_dir: str
     data_dir: str
     cache_dir: str
+    market_snapshot_max_symbols: int
     qmt_enable_trade_api: bool
     qmt_enable_real_order: bool
 
@@ -47,6 +48,7 @@ def get_settings() -> Settings:
         log_dir=os.getenv("LOG_DIR", "logs/app"),
         data_dir=os.getenv("DATA_DIR", "data"),
         cache_dir=os.getenv("CACHE_DIR", "data/cache"),
+        market_snapshot_max_symbols=int(os.getenv("MARKET_SNAPSHOT_MAX_SYMBOLS", "200")),
         qmt_enable_trade_api=_parse_bool(os.getenv("QMT_ENABLE_TRADE_API"), False),
         qmt_enable_real_order=_parse_bool(os.getenv("QMT_ENABLE_REAL_ORDER"), False),
     )
