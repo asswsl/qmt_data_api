@@ -76,6 +76,7 @@ def get_kline(
         },
         meta={
             "source": result.source,
+            "cache": result.cache,
             "count": len(result.bars),
         },
     )

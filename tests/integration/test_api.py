@@ -116,6 +116,9 @@ def test_cache_status_returns_runtime_cache_data(monkeypatch, tmp_path) -> None:
     assert "hit_count" in payload["data"]["layers"][0]
     assert payload["data"]["layers"][1]["name"] == "market_snapshot"
     assert payload["data"]["layers"][1]["backend"] == "memory"
+    assert payload["data"]["layers"][2]["name"] == "kline_file"
+    assert payload["data"]["layers"][2]["backend"] == "json_file"
+    assert "kline_file_cache_status" in payload["data"]["capabilities"]
 
 
 def test_qmt_status_returns_probe_data(monkeypatch) -> None:
@@ -328,4 +331,50 @@ def test_market_kline_returns_bars(monkeypatch) -> None:
     assert payload["data"]["symbol"] == "600519.SH"
     assert payload["data"]["bars"][0]["close"] == 1685.01
     assert payload["meta"]["source"] == "qmt"
+    assert payload["meta"]["cache"] == "miss"
     assert payload["meta"]["count"] == 1
+
+
+def test_market_kline_uses_file_cache_between_requests(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path / "cache"))
+    clear_settings_cache()
+    client = _build_client(monkeypatch)
+    calls = []
+
+    def _fake_fetch(
+        symbol: str,
+        period: str,
+        start_time: str,
+        end_time: str,
+        adjust: str,
+        limit: int | None,
+    ):
+        calls.append((symbol, period, start_time, end_time, adjust, limit))
+        return [
+            KlineBar(
+                time="2024-01-02T00:00:00+08:00",
+                trade_date="2024-01-02",
+                close=1685.01,
+            )
+        ]
+
+    monkeypatch.setattr("qmt_data_api.domain.market.service.fetch_xtdata_klines", _fake_fetch)
+
+    url = "/api/v1/market/kline?symbol=600519.SH&period=1d&start=20240101&end=20240110&limit=5"
+    first_response = client.get(url, headers={"X-API-Key": "secret-key"})
+    second_response = client.get(url, headers={"X-API-Key": "secret-key"})
+    status_response = client.get("/api/v1/cache/status", headers={"X-API-Key": "secret-key"})
+
+    assert first_response.status_code == HTTPStatus.OK
+    assert second_response.status_code == HTTPStatus.OK
+    assert len(calls) == 1
+    assert first_response.json()["meta"]["source"] == "qmt"
+    assert first_response.json()["meta"]["cache"] == "miss"
+    assert second_response.json()["meta"]["source"] == "cache"
+    assert second_response.json()["meta"]["cache"] == "hit"
+    assert second_response.json()["data"]["bars"][0]["close"] == 1685.01
+    kline_layer = [
+        layer for layer in status_response.json()["data"]["layers"] if layer["name"] == "kline_file"
+    ][0]
+    assert kline_layer["item_count"] >= 1
+    assert kline_layer["hit_count"] >= 1

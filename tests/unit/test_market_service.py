@@ -112,7 +112,10 @@ def test_market_snapshot_rejects_too_many_symbols(monkeypatch) -> None:
     clear_settings_cache()
 
 
-def test_market_kline_normalizes_params_and_returns_bars(monkeypatch) -> None:
+def test_market_kline_normalizes_params_and_returns_bars(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path / "cache"))
+    clear_settings_cache()
+
     def _fake_fetch(
         symbol: str,
         period: str,
@@ -146,7 +149,62 @@ def test_market_kline_normalizes_params_and_returns_bars(monkeypatch) -> None:
 
     assert result.symbol == "600519.SH"
     assert result.source == "qmt"
+    assert result.cache == "miss"
     assert result.bars[0].close == 1685.01
+
+    clear_settings_cache()
+
+
+def test_market_kline_uses_file_cache_after_first_fetch(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path / "cache"))
+    clear_settings_cache()
+    calls = []
+
+    def _fake_fetch(
+        symbol: str,
+        period: str,
+        start_time: str,
+        end_time: str,
+        adjust: str,
+        limit: int | None,
+    ):
+        calls.append((symbol, period, start_time, end_time, adjust, limit))
+        return [
+            KlineBar(
+                time="2024-01-02T00:00:00+08:00",
+                trade_date="2024-01-02",
+                close=1685.01,
+            )
+        ]
+
+    monkeypatch.setattr("qmt_data_api.domain.market.service.fetch_xtdata_klines", _fake_fetch)
+
+    first_result = get_market_klines("600519.SH", "1d", "20240101", "20240110", limit=5)
+    second_result = get_market_klines("600519.SH", "1d", "20240101", "20240110", limit=5)
+
+    assert len(calls) == 1
+    assert first_result.source == "qmt"
+    assert first_result.cache == "miss"
+    assert second_result.source == "cache"
+    assert second_result.cache == "hit"
+    assert second_result.bars[0].close == 1685.01
+
+    clear_settings_cache()
+
+
+def test_market_kline_cache_source_reports_cache_miss(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path / "cache"))
+    clear_settings_cache()
+
+    try:
+        get_market_klines("600519.SH", "1d", "20240101", "20240110", source="cache")
+    except MarketDataError as exc:
+        assert exc.code == ErrorCode.CACHE_MISS
+        assert exc.detail == {"symbols": ["600519.SH"]}
+    else:
+        raise AssertionError("expected MarketDataError")
+
+    clear_settings_cache()
 
 
 def test_market_kline_rejects_invalid_period() -> None:

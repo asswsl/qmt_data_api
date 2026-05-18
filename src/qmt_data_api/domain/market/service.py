@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from qmt_data_api.cache.file_cache import get_kline_file_cache
 from qmt_data_api.cache.keys import snapshot_key
 from qmt_data_api.cache.memory import get_snapshot_cache
 from qmt_data_api.cache.policies import snapshot_ttl_seconds
@@ -40,7 +41,7 @@ _DEFAULT_FIELDS = [
 
 _SUPPORTED_PERIODS = {"tick", "1m", "5m", "15m", "30m", "60m", "1d", "1w", "1mon"}
 _SUPPORTED_ADJUST = {"none", "front", "back"}
-_SUPPORTED_SOURCES = {"auto", "qmt"}
+_SUPPORTED_SOURCES = {"auto", "cache", "qmt"}
 _SUPPORTED_SNAPSHOT_SOURCES = {"auto", "cache", "qmt"}
 
 
@@ -191,6 +192,22 @@ def get_market_klines(
     if start_time > end_time:
         raise invalid_time_range_error(start, end)
 
+    kline_cache = get_kline_file_cache()
+    if normalized_source in {"auto", "cache"}:
+        cached_payload = kline_cache.get(
+            normalized_symbol,
+            normalized_period,
+            normalized_adjust,
+            start_time,
+            end_time,
+            limit,
+        )
+        if cached_payload is not None:
+            cached_result = KlineResult.model_validate(cached_payload)
+            return cached_result.model_copy(update={"source": "cache", "cache": "hit"})
+        if normalized_source == "cache":
+            raise cache_miss_error([normalized_symbol])
+
     bars = fetch_xtdata_klines(
         normalized_symbol,
         normalized_period,
@@ -199,10 +216,21 @@ def get_market_klines(
         normalized_adjust,
         limit,
     )
-    return KlineResult(
+    result = KlineResult(
         symbol=normalized_symbol,
         period=normalized_period,
         adjust=normalized_adjust,
         source="qmt",
         bars=bars,
+        cache="miss",
     )
+    kline_cache.set(
+        normalized_symbol,
+        normalized_period,
+        normalized_adjust,
+        start_time,
+        end_time,
+        limit,
+        result.model_dump(mode="json"),
+    )
+    return result

@@ -239,6 +239,114 @@ limit   可选，最大返回条数，必须大于等于 1
 }
 ```
 
+### 历史 K 线文件缓存
+
+实现范围：
+
+- 已实现历史 K 线 JSON 文件缓存，缓存位置为 `CACHE_DIR/klines/<symbol>/<period>/<adjust>/<start>_<end>_limit-<limit>.json`。
+- 已实现完整请求参数粒度缓存，缓存键包含证券代码、周期、复权类型、开始日期、结束日期和返回条数。
+- 已实现 `source=auto` 优先读取文件缓存；未命中时回源 QMT，成功后写入本地 JSON 文件。
+- 已实现 `source=cache` 只读文件缓存；缺失时返回 `CACHE_MISS`，不会触发 QMT 回源。
+- 已实现 `source=qmt` 强制回源 QMT，并刷新同参数文件缓存。
+- 已在响应 `meta` 中返回 `cache` 状态，当前支持 `hit` 与 `miss`。
+- 已在 `GET /api/v1/cache/status` 中新增 `kline_file` 缓存层，展示历史 K 线文件缓存条目数、命中次数、未命中次数、淘汰次数、过期次数和文件年龄。
+- 当前文件缓存没有 TTL，也不做区间合并或增量补齐；这是历史缓存能力的第一步。
+
+验证结果：
+
+- `python -m compileall -q src tests` 通过。
+- `python -m pytest tests/unit/test_file_cache.py tests/unit/test_market_service.py tests/integration/test_api.py` 通过。
+- `python -m pytest` 通过，28 项全量测试通过。
+- 已覆盖首次请求回源 QMT、二次请求命中文件缓存、`source=cache` 缺失返回 `CACHE_MISS`、缓存状态接口返回 `kline_file` 层。
+
+K 线接口格式：
+
+```http
+GET /api/v1/market/kline?symbol=600519.SH&period=1d&start=20240101&end=20240110&adjust=none&source=auto&limit=5
+```
+
+鉴权要求：
+
+- 需要请求头：`X-API-Key: <api-key>`。
+- 可选请求头：`X-Request-ID: <request-id>`。
+
+请求参数：
+
+```text
+symbol  必填，证券代码，例如 600519.SH
+period  可选，K 线周期，默认 1d；支持 tick | 1m | 5m | 15m | 30m | 60m | 1d | 1w | 1mon
+start   必填，开始日期，支持 YYYYMMDD 或 YYYY-MM-DD
+end     必填，结束日期，支持 YYYYMMDD 或 YYYY-MM-DD
+adjust  可选，复权类型：none | front | back，默认 none
+source  可选，数据来源：auto | cache | qmt，默认 auto
+limit   可选，最大返回条数，必须大于等于 1
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": {
+    "symbol": "600519.SH",
+    "period": "1d",
+    "adjust": "none",
+    "bars": [
+      {
+        "time": "2024-01-02T00:00:00+08:00",
+        "trade_date": "2024-01-02",
+        "close": 1685.01
+      }
+    ]
+  },
+  "meta": {
+    "server_time": "2026-05-18T10:45:00+08:00",
+    "source": "cache",
+    "cache": "hit",
+    "count": 1
+  }
+}
+```
+
+缓存缺失响应：
+
+```json
+{
+  "success": false,
+  "code": "CACHE_MISS",
+  "message": "缓存缺失",
+  "request_id": "req_xxx",
+  "data": {
+    "symbols": ["600519.SH"]
+  },
+  "meta": {
+    "retryable": false,
+    "server_time": "2026-05-18T10:45:00+08:00"
+  }
+}
+```
+
+缓存状态接口补充：
+
+```json
+{
+  "name": "kline_file",
+  "backend": "json_file",
+  "enabled": true,
+  "item_count": 1,
+  "hit_count": 1,
+  "miss_count": 1,
+  "evicted_count": 0,
+  "expired_count": 0,
+  "max_ttl_seconds": null,
+  "oldest_item_age_seconds": 3.2,
+  "newest_item_age_seconds": 3.2
+}
+```
+
 ### 行情快照接口
 
 实现范围：

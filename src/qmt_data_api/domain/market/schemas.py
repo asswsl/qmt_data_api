@@ -58,3 +58,4 @@ class KlineResult(BaseModel):
     adjust: str
     source: str
     bars: list[KlineBar]
+    cache: str = "miss"
