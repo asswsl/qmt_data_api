@@ -6,6 +6,9 @@
 
 ### Changed
 
+- 新增结构化访问日志中间件，记录请求 ID、方法、路径、状态码、耗时、客户端 IP、错误码和脱敏 API Key 指纹。
+- 统一错误响应会将应用错误码写入请求状态，便于访问日志关联失败原因。
+- 新增访问日志集成测试，覆盖成功请求、鉴权失败请求和敏感密钥不落日志。
 - 新增历史 K 线只读接口 `GET /api/v1/market/kline`，支持证券代码、周期、起止日期、复权类型、数据来源和返回条数参数。
 - 新增历史 K 线 xtdata 适配与 DataFrame 行映射，统一输出 `time`、`trade_date`、`open`、`high`、`low`、`close`、`volume`、`amount`、`pre_close` 等字段。
 - 新增历史 K 线参数校验，覆盖非法证券代码、不支持周期、不支持复权类型、不支持数据来源和错误时间范围。
@@ -24,6 +27,10 @@
 
 ### Validation
 
+- 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
+- 已执行 `python -m pytest tests/integration/test_api.py`，集成测试通过。
+- 已执行 `python -m pytest`，17 项测试全部通过。
+- 已执行 `git diff --check`，未发现空白错误。
 - 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
 - 已执行 `python -m pytest tests/unit/test_market_service.py tests/integration/test_api.py`，14 项相关测试全部通过。
 - 已执行真实主机历史 K 线探测：`get_market_klines("600519.SH", "1d", "20240101", "20240110", limit=5)` 返回可用 K 线数据。

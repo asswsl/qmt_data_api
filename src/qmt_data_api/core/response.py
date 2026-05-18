@@ -44,6 +44,7 @@ def success_response(
 
 
 def error_response(request: Request, error: AppError) -> JSONResponse:
+    request.state.error_code = error.code
     payload = {
         "success": False,
         "code": error.code,

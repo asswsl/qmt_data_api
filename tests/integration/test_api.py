@@ -1,6 +1,7 @@
 # 验证健康检查、鉴权和 QMT 状态接口行为。
 from __future__ import annotations
 
+import logging
 from http import HTTPStatus
 
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ from qmt_data_api.app import create_app
 from qmt_data_api.core.config import clear_settings_cache
 from qmt_data_api.core.errors import ErrorCode, QmtError
 from qmt_data_api.domain.market.schemas import KlineBar, KlineResult, SnapshotItem, SnapshotResult
+from qmt_data_api.middleware.access_log import ACCESS_LOGGER_NAME
 
 
 def _build_client(monkeypatch) -> TestClient:
@@ -40,6 +42,45 @@ def test_qmt_status_requires_api_key(monkeypatch) -> None:
     assert response.status_code == HTTPStatus.UNAUTHORIZED
     payload = response.json()
     assert payload["code"] == ErrorCode.AUTH_MISSING_API_KEY
+
+
+def test_access_log_records_success_request(monkeypatch, caplog) -> None:
+    client = _build_client(monkeypatch)
+
+    with caplog.at_level(logging.INFO, logger=ACCESS_LOGGER_NAME):
+        response = client.get("/api/v1/health", headers={"X-Request-ID": "req_test_access"})
+
+    assert response.status_code == HTTPStatus.OK
+    records = [record for record in caplog.records if record.name == ACCESS_LOGGER_NAME]
+    assert records
+    record = records[-1]
+    assert record.request_id == "req_test_access"
+    assert record.method == "GET"
+    assert record.path == "/api/v1/health"
+    assert record.status_code == HTTPStatus.OK
+    assert record.duration_ms >= 0
+    assert record.error_code is None
+    assert record.api_key_fingerprint is None
+
+
+def test_access_log_records_error_code_and_api_key_fingerprint(monkeypatch, caplog) -> None:
+    client = _build_client(monkeypatch)
+
+    with caplog.at_level(logging.INFO, logger=ACCESS_LOGGER_NAME):
+        response = client.get(
+            "/api/v1/status/qmt",
+            headers={"X-Request-ID": "req_auth_error", "X-API-Key": "bad-key"},
+        )
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    records = [record for record in caplog.records if record.name == ACCESS_LOGGER_NAME]
+    assert records
+    record = records[-1]
+    assert record.request_id == "req_auth_error"
+    assert record.status_code == HTTPStatus.UNAUTHORIZED
+    assert record.error_code == ErrorCode.AUTH_INVALID_API_KEY
+    assert record.api_key_fingerprint is not None
+    assert record.api_key_fingerprint != "bad-key"
 
 
 def test_qmt_status_returns_probe_data(monkeypatch) -> None:
