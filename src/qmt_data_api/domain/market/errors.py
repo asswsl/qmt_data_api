@@ -66,3 +66,13 @@ def unsupported_source_error(source: str) -> MarketDataError:
         detail={"source": source},
         retryable=False,
     )
+
+
+def cache_miss_error(symbols: list[str]) -> MarketDataError:
+    return MarketDataError(
+        code=ErrorCode.CACHE_MISS,
+        message="缓存中不存在请求的数据",
+        status_code=HTTPStatus.NOT_FOUND,
+        detail={"symbols": symbols},
+        retryable=False,
+    )

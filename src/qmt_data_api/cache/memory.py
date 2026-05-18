@@ -96,7 +96,12 @@ class InMemoryCache:
 
 
 runtime_cache = InMemoryCache()
+snapshot_cache = InMemoryCache()
 
 
 def get_runtime_cache() -> InMemoryCache:
     return runtime_cache
+
+
+def get_snapshot_cache() -> InMemoryCache:
+    return snapshot_cache

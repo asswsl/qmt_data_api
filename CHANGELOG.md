@@ -8,7 +8,9 @@
 
 - 新增缓存状态接口 `GET /api/v1/cache/status`，用于查询运行期缓存后端、缓存目录、条目数量、命中次数、未命中次数、淘汰次数和过期次数。
 - 缓存状态接口新增 `cache_dir_status` 字段，用于报告缓存目录是否存在、是否为目录、父目录是否存在以及是否已具备文件缓存落盘条件。
+- 缓存状态接口新增 `market_snapshot` 缓存层，能够展示行情快照缓存真实条目数、命中次数、未命中次数、过期次数和 TTL 状态。
 - 新增进程内 TTL 缓存基础实现，支持 `get`、`set`、`delete`、`clear` 和状态快照，为后续行情快照缓存、历史缓存索引和预热任务提供统一状态来源。
+- 行情快照接口新增 `source=auto|cache|qmt` 参数，`auto` 优先读取快照缓存并在缺失时回源 QMT，响应 `meta` 返回 `source` 和 `cache` 状态。
 - 新增缓存状态接口集成测试和内存缓存单元测试，覆盖鉴权、状态响应、命中未命中统计和 TTL 过期统计。
 - 新增历史 K 线只读接口 `GET /api/v1/market/kline`，支持证券代码、周期、起止日期、复权类型、数据来源和返回条数参数。
 - 新增历史 K 线 xtdata 适配与 DataFrame 行映射，统一输出 `time`、`trade_date`、`open`、`high`、`low`、`close`、`volume`、`amount`、`pre_close` 等字段。
@@ -30,6 +32,7 @@
 
 - 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
 - 已执行 `python -m pytest tests/unit/test_memory_cache.py tests/integration/test_api.py`，缓存状态接口、缓存目录状态与内存缓存相关测试通过。
+- 已执行 `python -m pytest tests/unit/test_config.py tests/unit/test_memory_cache.py tests/unit/test_market_service.py tests/integration/test_api.py`，缓存联动相关测试通过。
 - 已执行 `python -m pytest`，全量测试通过。
 - 已执行 `git diff --check`，未发现空白错误。
 - 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
