@@ -1,6 +1,24 @@
 # Changelog
 
-本文件记录本仓库的重要变更。每次 agent 完成变更后，都应同步更新此文件。
+本文档记录本仓库的重要变更。每次 agent 完成变更后，都应同步更新此文件。
+
+## 2026-05-18
+
+### Changed
+
+- 实现第一步最小可运行只读 API 骨架，包括配置加载、统一响应、应用错误码、请求 ID 中间件、API Key 鉴权和统一异常处理。
+- 实现 `GET /api/v1/health`、`GET /api/v1/status` 和 `GET /api/v1/status/qmt`。
+- 接入真实 `xtquant.xtdata` 状态探测，用于判断 xtdata 导入、客户端连接、本地数据目录和行情服务能力状态。
+- 修复 `AppError` 初始化链路，确保鉴权失败和 QMT 探测异常能够稳定返回统一错误结构。
+- 新增配置与接口测试，覆盖 API Key、健康检查和 QMT 状态接口行为。
+
+### Validation
+
+- 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
+- 已执行 `python -m pytest tests/unit/test_config.py tests/integration/test_api.py`，5 项测试全部通过。
+- 已执行真实主机探测：`probe_xtdata_status()` 返回已连接状态，当前本机 QMT 数据链路可用。
+- 已检查本次新增与修改的代码文件首行中文说明。
+- 已执行 `git diff --check`，未发现空白错误。
 
 ## 2026-05-15
 

@@ -1,20 +1,24 @@
-# 提供健康检查和服务状态接口。
+# 提供健康检查和基础服务状态接口。
 """Health and readiness routes."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
-router = APIRouter()
+from qmt_data_api import __version__
+from qmt_data_api.api.deps import get_app_settings
+from qmt_data_api.core.response import success_response
+
+router = APIRouter(prefix="/api/v1")
 
 
-@router.get("/api/v1/health")
-def health() -> dict[str, object]:
-    return {
-        "success": True,
-        "code": "OK",
-        "message": "success",
-        "data": {
+@router.get("/health")
+def health(request: Request) -> dict[str, object]:
+    settings = get_app_settings()
+    return success_response(
+        request,
+        data={
             "service": "qmt-data-api",
-            "version": "0.1.0",
+            "version": __version__,
             "status": "ok",
+            "environment": settings.app_env,
         },
-    }
+    )
