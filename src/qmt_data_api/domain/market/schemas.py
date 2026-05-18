@@ -34,3 +34,24 @@ class SnapshotResult(BaseModel):
     items: list[SnapshotItem]
     missing_symbols: list[str]
     fields: list[str] | None = None
+
+
+class KlineBar(BaseModel):
+    time: str | None = None
+    trade_date: str | None = None
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    close: float | None = None
+    volume: float | None = None
+    amount: float | None = None
+    pre_close: float | None = None
+    suspend_flag: int | None = None
+
+
+class KlineResult(BaseModel):
+    symbol: str
+    period: str
+    adjust: str
+    source: str
+    bars: list[KlineBar]

@@ -26,3 +26,43 @@ def too_many_symbols_error(count: int, limit: int) -> MarketDataError:
         detail={"count": count, "limit": limit},
         retryable=False,
     )
+
+
+def invalid_period_error(period: str) -> MarketDataError:
+    return MarketDataError(
+        code=ErrorCode.INVALID_PERIOD,
+        message="K 线周期不支持",
+        status_code=HTTPStatus.BAD_REQUEST,
+        detail={"period": period},
+        retryable=False,
+    )
+
+
+def invalid_adjust_error(adjust: str) -> MarketDataError:
+    return MarketDataError(
+        code=ErrorCode.INVALID_ADJUST,
+        message="复权类型不支持",
+        status_code=HTTPStatus.BAD_REQUEST,
+        detail={"adjust": adjust},
+        retryable=False,
+    )
+
+
+def invalid_time_range_error(start: str, end: str) -> MarketDataError:
+    return MarketDataError(
+        code=ErrorCode.INVALID_TIME_RANGE,
+        message="时间范围错误",
+        status_code=HTTPStatus.BAD_REQUEST,
+        detail={"start": start, "end": end},
+        retryable=False,
+    )
+
+
+def unsupported_source_error(source: str) -> MarketDataError:
+    return MarketDataError(
+        code=ErrorCode.UNSUPPORTED_SOURCE,
+        message="数据来源暂不支持",
+        status_code=HTTPStatus.BAD_REQUEST,
+        detail={"source": source},
+        retryable=False,
+    )

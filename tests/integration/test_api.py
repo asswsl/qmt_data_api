@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from qmt_data_api.app import create_app
 from qmt_data_api.core.config import clear_settings_cache
 from qmt_data_api.core.errors import ErrorCode, QmtError
-from qmt_data_api.domain.market.schemas import SnapshotItem, SnapshotResult
+from qmt_data_api.domain.market.schemas import KlineBar, KlineResult, SnapshotItem, SnapshotResult
 
 
 def _build_client(monkeypatch) -> TestClient:
@@ -156,3 +156,57 @@ def test_market_snapshot_post_returns_data(monkeypatch) -> None:
     payload = response.json()
     assert payload["data"] == [{"symbol": "600519.SH", "last_price": 1688.88}]
     assert payload["meta"]["fields"] == ["last_price"]
+
+
+def test_market_kline_returns_bars(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    def _fake_klines(
+        symbol: str,
+        period: str,
+        start: str,
+        end: str,
+        adjust: str = "none",
+        source: str = "auto",
+        limit: int | None = None,
+    ) -> KlineResult:
+        assert symbol == "600519.SH"
+        assert period == "1d"
+        assert start == "20240101"
+        assert end == "20240110"
+        assert adjust == "none"
+        assert source == "auto"
+        assert limit == 5
+        return KlineResult(
+            symbol="600519.SH",
+            period="1d",
+            adjust="none",
+            source="qmt",
+            bars=[
+                KlineBar(
+                    time="2024-01-02T00:00:00+08:00",
+                    trade_date="2024-01-02",
+                    open=1715.0,
+                    high=1718.19,
+                    low=1678.1,
+                    close=1685.01,
+                    volume=32156,
+                    amount=5440083000.0,
+                )
+            ],
+        )
+
+    monkeypatch.setattr("qmt_data_api.api.http.market.get_market_klines", _fake_klines)
+
+    response = client.get(
+        "/api/v1/market/kline"
+        "?symbol=600519.SH&period=1d&start=20240101&end=20240110&limit=5",
+        headers={"X-API-Key": "secret-key"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert payload["data"]["symbol"] == "600519.SH"
+    assert payload["data"]["bars"][0]["close"] == 1685.01
+    assert payload["meta"]["source"] == "qmt"
+    assert payload["meta"]["count"] == 1

@@ -4,6 +4,100 @@
 
 ## 2026-05-18
 
+### 历史 K 线接口
+
+实现范围：
+
+- 已实现单证券历史 K 线查询。
+- 已支持周期：`tick`、`1m`、`5m`、`15m`、`30m`、`60m`、`1d`、`1w`、`1mon`。
+- 已支持复权类型：`none`、`front`、`back`。
+- 已支持数据来源参数：`auto`、`qmt`。当前尚未实现缓存，`auto` 会直接走 QMT。
+- 已支持返回条数限制 `limit`。
+- 已实现 xtdata 历史行情适配，底层调用 `xtdata.get_market_data_ex(...)`。
+- 已实现 DataFrame 行映射，输出统一 K 线字段。
+
+验证结果：
+
+- `python -m compileall -q src tests` 通过。
+- `python -m pytest tests/unit/test_market_service.py tests/integration/test_api.py` 通过，14 项相关测试全部通过。
+- 已执行真实 `get_market_klines("600519.SH", "1d", "20240101", "20240110", limit=5)` 探测，本机 QMT 返回可用历史 K 线。
+
+接口格式：
+
+```http
+GET /api/v1/market/kline?symbol=600519.SH&period=1d&start=20240101&end=20240110&adjust=none&source=auto&limit=5
+```
+
+鉴权要求：
+
+- 需要请求头：`X-API-Key: <api-key>`。
+- 可选请求头：`X-Request-ID: <request-id>`。
+
+请求参数：
+
+```text
+symbol  必填，证券代码，例如 600519.SH
+period  可选，K 线周期，默认 1d
+start   必填，开始日期，支持 YYYYMMDD 或 YYYY-MM-DD
+end     必填，结束日期，支持 YYYYMMDD 或 YYYY-MM-DD
+adjust  可选，复权类型，none | front | back，默认 none
+source  可选，数据来源，auto | qmt，默认 auto
+limit   可选，最大返回条数，必须大于等于 1
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": {
+    "symbol": "600519.SH",
+    "period": "1d",
+    "adjust": "none",
+    "bars": [
+      {
+        "time": "2024-01-04T00:00:00+08:00",
+        "trade_date": "2024-01-04",
+        "open": 1693.0,
+        "high": 1693.0,
+        "low": 1662.93,
+        "close": 1669.0,
+        "volume": 21551.0,
+        "amount": 3603970147.0,
+        "pre_close": 1694.0,
+        "suspend_flag": 0
+      }
+    ]
+  },
+  "meta": {
+    "server_time": "2026-05-18T10:45:00+08:00",
+    "source": "qmt",
+    "count": 1
+  }
+}
+```
+
+错误响应：
+
+```json
+{
+  "success": false,
+  "code": "INVALID_PERIOD",
+  "message": "K 线周期不支持",
+  "request_id": "req_xxx",
+  "data": {
+    "period": "2m"
+  },
+  "meta": {
+    "retryable": false,
+    "server_time": "2026-05-18T10:45:00+08:00"
+  }
+}
+```
+
 ### 行情快照接口
 
 实现范围：

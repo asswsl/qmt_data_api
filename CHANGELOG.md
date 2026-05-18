@@ -6,6 +6,10 @@
 
 ### Changed
 
+- 新增历史 K 线只读接口 `GET /api/v1/market/kline`，支持证券代码、周期、起止日期、复权类型、数据来源和返回条数参数。
+- 新增历史 K 线 xtdata 适配与 DataFrame 行映射，统一输出 `time`、`trade_date`、`open`、`high`、`low`、`close`、`volume`、`amount`、`pre_close` 等字段。
+- 新增历史 K 线参数校验，覆盖非法证券代码、不支持周期、不支持复权类型、不支持数据来源和错误时间范围。
+- 新增历史 K 线单元测试、集成测试和真实 QMT 历史数据验证。
 - 新增行情快照只读接口，支持 `GET /api/v1/market/snapshot` 和 `POST /api/v1/market/snapshot`。
 - 新增证券代码规范化、行情快照领域服务、xtdata 快照适配和原始字段映射。
 - 新增行情快照参数校验，覆盖非法证券代码、请求数量超限、缺失数据和 API Key 鉴权。
@@ -20,6 +24,9 @@
 
 ### Validation
 
+- 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
+- 已执行 `python -m pytest tests/unit/test_market_service.py tests/integration/test_api.py`，14 项相关测试全部通过。
+- 已执行真实主机历史 K 线探测：`get_market_klines("600519.SH", "1d", "20240101", "20240110", limit=5)` 返回可用 K 线数据。
 - 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
 - 已执行 `python -m pytest`，11 项测试全部通过。
 - 已执行真实主机行情快照探测：`get_market_snapshots(["600519.SH"])` 返回可用快照数据。

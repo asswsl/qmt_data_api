@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from qmt_data_api.auth.api_key import require_api_key
 from qmt_data_api.core.response import success_response
 from qmt_data_api.domain.market.schemas import SnapshotRequest
-from qmt_data_api.domain.market.service import get_market_snapshots
+from qmt_data_api.domain.market.service import get_market_klines, get_market_snapshots
 
 router = APIRouter(prefix="/api/v1/market", dependencies=[Depends(require_api_key)])
 
@@ -45,5 +45,32 @@ def post_snapshot(request: Request, payload: SnapshotRequest) -> dict[str, objec
         meta={
             "missing_symbols": result.missing_symbols,
             "fields": result.fields,
+        },
+    )
+
+
+@router.get("/kline")
+def get_kline(
+    request: Request,
+    symbol: str = Query(min_length=1),
+    period: str = "1d",
+    start: str = Query(min_length=8),
+    end: str = Query(min_length=8),
+    adjust: str = "none",
+    source: str = "auto",
+    limit: int | None = Query(default=None, ge=1),
+) -> dict[str, object]:
+    result = get_market_klines(symbol, period, start, end, adjust, source, limit)
+    return success_response(
+        request,
+        data={
+            "symbol": result.symbol,
+            "period": result.period,
+            "adjust": result.adjust,
+            "bars": [bar.model_dump(exclude_none=True) for bar in result.bars],
+        },
+        meta={
+            "source": result.source,
+            "count": len(result.bars),
         },
     )
