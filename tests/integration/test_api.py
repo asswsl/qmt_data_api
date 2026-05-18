@@ -51,10 +51,12 @@ def test_cache_status_requires_api_key(monkeypatch) -> None:
     assert response.json()["code"] == ErrorCode.AUTH_MISSING_API_KEY
 
 
-def test_cache_status_returns_runtime_cache_data(monkeypatch) -> None:
-    client = _build_client(monkeypatch)
-    monkeypatch.setenv("CACHE_DIR", "data/test-cache")
+def test_cache_status_returns_runtime_cache_data(monkeypatch, tmp_path) -> None:
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    monkeypatch.setenv("CACHE_DIR", str(cache_dir))
     clear_settings_cache()
+    client = _build_client(monkeypatch)
 
     response = client.get("/api/v1/cache/status", headers={"X-API-Key": "secret-key"})
 
@@ -63,7 +65,10 @@ def test_cache_status_returns_runtime_cache_data(monkeypatch) -> None:
     assert payload["success"] is True
     assert payload["data"]["status"] == "ok"
     assert payload["data"]["enabled"] is True
-    assert payload["data"]["cache_dir"] == "data/test-cache"
+    assert payload["data"]["cache_dir"] == str(cache_dir)
+    assert payload["data"]["cache_dir_status"]["exists"] is True
+    assert payload["data"]["cache_dir_status"]["is_dir"] is True
+    assert payload["data"]["cache_dir_status"]["ready_for_file_cache"] is True
     assert payload["data"]["layers"][0]["name"] == "runtime"
     assert payload["data"]["layers"][0]["backend"] == "memory"
     assert "hit_count" in payload["data"]["layers"][0]

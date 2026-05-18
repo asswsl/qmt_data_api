@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, Request
 
 from qmt_data_api.api.deps import get_app_settings
@@ -11,6 +13,18 @@ from qmt_data_api.cache.memory import get_runtime_cache
 from qmt_data_api.core.response import success_response
 
 router = APIRouter(prefix="/api/v1/cache", dependencies=[Depends(require_api_key)])
+
+
+def _cache_dir_status(cache_dir: str) -> dict[str, object]:
+    path = Path(cache_dir)
+    parent = path.parent
+    return {
+        "path": cache_dir,
+        "exists": path.exists(),
+        "is_dir": path.is_dir(),
+        "parent_exists": parent.exists(),
+        "ready_for_file_cache": path.exists() and path.is_dir(),
+    }
 
 
 @router.get("/status")
@@ -23,6 +37,7 @@ def cache_status(request: Request) -> dict[str, object]:
             "status": "ok",
             "enabled": True,
             "cache_dir": settings.cache_dir,
+            "cache_dir_status": _cache_dir_status(settings.cache_dir),
             "layers": [
                 {
                     "name": "runtime",

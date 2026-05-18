@@ -11,13 +11,14 @@
 - 已实现 `GET /api/v1/cache/status` 只读接口。
 - 已实现进程内 TTL 缓存基础对象，支持写入、读取、删除、清空和状态快照。
 - 已返回缓存启用状态、缓存目录、运行期缓存层、条目数量、命中次数、未命中次数、淘汰次数、过期次数、最大 TTL 和缓存条目年龄。
+- 已返回缓存目录状态 `cache_dir_status`，用于判断缓存目录是否存在、是否为目录、父目录是否存在以及是否具备文件缓存落盘条件。
 - 当前接口提供运行期内存缓存状态；文件缓存覆盖范围、缓存预热任务和历史缓存索引尚未接入。
 
 验证结果：
 
 - `python -m compileall -q src tests` 通过。
 - `python -m pytest tests/unit/test_memory_cache.py tests/integration/test_api.py` 通过。
-- 已覆盖接口鉴权、状态响应、命中未命中统计和 TTL 过期统计。
+- 已覆盖接口鉴权、状态响应、缓存目录状态、命中未命中统计和 TTL 过期统计。
 
 接口格式：
 
@@ -46,6 +47,13 @@ GET /api/v1/cache/status
     "status": "ok",
     "enabled": true,
     "cache_dir": "data/cache",
+    "cache_dir_status": {
+      "path": "data/cache",
+      "exists": true,
+      "is_dir": true,
+      "parent_exists": true,
+      "ready_for_file_cache": true
+    },
     "layers": [
       {
         "name": "runtime",
