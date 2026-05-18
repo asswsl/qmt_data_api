@@ -6,6 +6,9 @@
 
 ### Changed
 
+- 新增结构化访问日志中间件，记录请求 ID、方法、路径、状态码、耗时、客户端 IP、错误码和脱敏 API Key 指纹。
+- 统一错误响应会将应用错误码写入请求状态，便于访问日志关联失败原因。
+- 新增访问日志集成测试，覆盖成功请求、鉴权失败请求和敏感密钥不落日志。
 - 新增缓存状态接口 `GET /api/v1/cache/status`，用于查询运行期缓存后端、缓存目录、条目数量、命中次数、未命中次数、淘汰次数和过期次数。
 - 缓存状态接口新增 `cache_dir_status` 字段，用于报告缓存目录是否存在、是否为目录、父目录是否存在以及是否已具备文件缓存落盘条件。
 - 缓存状态接口新增 `market_snapshot` 缓存层，能够展示行情快照缓存真实条目数、命中次数、未命中次数、过期次数和 TTL 状态。
@@ -31,6 +34,7 @@
 ### Validation
 
 - 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
+- 已执行 `python -m pytest tests/integration/test_api.py`，访问日志与 API 集成测试通过。
 - 已执行 `python -m pytest tests/unit/test_memory_cache.py tests/integration/test_api.py`，缓存状态接口、缓存目录状态与内存缓存相关测试通过。
 - 已执行 `python -m pytest tests/unit/test_config.py tests/unit/test_memory_cache.py tests/unit/test_market_service.py tests/integration/test_api.py`，缓存联动相关测试通过。
 - 已执行 `python -m pytest`，全量测试通过。

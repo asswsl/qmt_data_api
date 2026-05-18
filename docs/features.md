@@ -4,6 +4,38 @@
 
 ## 2026-05-18
 
+### 访问日志中间件
+
+实现范围：
+
+- 已实现结构化 HTTP 访问日志中间件。
+- 已记录请求 ID、HTTP 方法、请求路径、状态码、耗时毫秒数、客户端 IP、错误码和 API Key 指纹。
+- 已避免记录原始 API Key 和完整查询串，降低敏感信息进入日志的风险。
+- 已支持从 `X-Forwarded-For` 读取客户端来源地址；缺失时回退到连接客户端地址。
+- 已支持成功请求和统一错误响应的日志记录，鉴权失败等应用错误会写入 `error_code`。
+
+日志字段格式：
+
+```text
+logger_name          qmt_data_api.access
+message              http_access
+request_id           请求 ID，来自 X-Request-ID 或系统生成值
+method               HTTP 方法，例如 GET
+path                 请求路径，例如 /api/v1/status/qmt
+status_code          HTTP 状态码，例如 200、401、500
+duration_ms          请求耗时，单位毫秒
+client_ip            客户端 IP，优先取 X-Forwarded-For 首个地址
+error_code           应用错误码；成功请求为 null
+api_key_fingerprint  API Key 的 SHA256 前 12 位；未提供时为 null
+```
+
+验证结果：
+
+- `python -m compileall -q src tests` 通过。
+- `python -m pytest tests/integration/test_api.py` 通过。
+- 已覆盖成功健康检查请求的访问日志字段。
+- 已覆盖鉴权失败请求的错误码记录与 API Key 脱敏指纹。
+
 ### 缓存状态接口
 
 实现范围：
