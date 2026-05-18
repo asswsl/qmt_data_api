@@ -6,6 +6,7 @@ from http import HTTPStatus
 from fastapi.testclient import TestClient
 
 from qmt_data_api.app import create_app
+from qmt_data_api.cache.memory import get_snapshot_cache
 from qmt_data_api.core.config import clear_settings_cache
 from qmt_data_api.core.errors import ErrorCode, QmtError
 from qmt_data_api.domain.market.schemas import KlineBar, KlineResult, SnapshotItem, SnapshotResult
@@ -40,6 +41,40 @@ def test_qmt_status_requires_api_key(monkeypatch) -> None:
     assert response.status_code == HTTPStatus.UNAUTHORIZED
     payload = response.json()
     assert payload["code"] == ErrorCode.AUTH_MISSING_API_KEY
+
+
+def test_cache_status_requires_api_key(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    response = client.get("/api/v1/cache/status")
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    assert response.json()["code"] == ErrorCode.AUTH_MISSING_API_KEY
+
+
+def test_cache_status_returns_runtime_cache_data(monkeypatch, tmp_path) -> None:
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    monkeypatch.setenv("CACHE_DIR", str(cache_dir))
+    clear_settings_cache()
+    client = _build_client(monkeypatch)
+
+    response = client.get("/api/v1/cache/status", headers={"X-API-Key": "secret-key"})
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["status"] == "ok"
+    assert payload["data"]["enabled"] is True
+    assert payload["data"]["cache_dir"] == str(cache_dir)
+    assert payload["data"]["cache_dir_status"]["exists"] is True
+    assert payload["data"]["cache_dir_status"]["is_dir"] is True
+    assert payload["data"]["cache_dir_status"]["ready_for_file_cache"] is True
+    assert payload["data"]["layers"][0]["name"] == "runtime"
+    assert payload["data"]["layers"][0]["backend"] == "memory"
+    assert "hit_count" in payload["data"]["layers"][0]
+    assert payload["data"]["layers"][1]["name"] == "market_snapshot"
+    assert payload["data"]["layers"][1]["backend"] == "memory"
 
 
 def test_qmt_status_returns_probe_data(monkeypatch) -> None:
@@ -99,9 +134,14 @@ def test_market_snapshot_requires_api_key(monkeypatch) -> None:
 def test_market_snapshot_get_returns_data(monkeypatch) -> None:
     client = _build_client(monkeypatch)
 
-    def _fake_snapshots(symbols: list[str], fields: list[str] | None = None) -> SnapshotResult:
+    def _fake_snapshots(
+        symbols: list[str],
+        fields: list[str] | None = None,
+        source: str = "auto",
+    ) -> SnapshotResult:
         assert symbols == ["600519.SH", "000001.SZ"]
         assert fields == ["last_price", "volume"]
+        assert source == "auto"
         return SnapshotResult(
             items=[
                 SnapshotItem(
@@ -130,14 +170,52 @@ def test_market_snapshot_get_returns_data(monkeypatch) -> None:
     assert payload["data"][0]["last_price"] == 1688.88
     assert "raw" not in payload["data"][0]
     assert payload["meta"]["missing_symbols"] == ["000001.SZ"]
+    assert payload["meta"]["source"] == "qmt"
+    assert payload["meta"]["cache"] == "miss"
+
+
+def test_cache_status_reports_snapshot_cache_stats(monkeypatch) -> None:
+    get_snapshot_cache().clear()
+    monkeypatch.setenv("MARKET_SNAPSHOT_CACHE_TTL_SECONDS", "30")
+    clear_settings_cache()
+    client = _build_client(monkeypatch)
+
+    def _fake_snapshots(symbols: list[str]):
+        assert symbols == ["600519.SH"]
+        return ([SnapshotItem(symbol="600519.SH", last_price=1688.88)], [])
+
+    monkeypatch.setattr("qmt_data_api.domain.market.service.fetch_xtdata_snapshots", _fake_snapshots)
+
+    first_response = client.get(
+        "/api/v1/market/snapshot?symbols=600519.SH",
+        headers={"X-API-Key": "secret-key"},
+    )
+    second_response = client.get(
+        "/api/v1/market/snapshot?symbols=600519.SH",
+        headers={"X-API-Key": "secret-key"},
+    )
+    status_response = client.get("/api/v1/cache/status", headers={"X-API-Key": "secret-key"})
+
+    assert first_response.json()["meta"]["cache"] == "miss"
+    assert second_response.json()["meta"]["cache"] == "hit"
+    snapshot_layer = [
+        layer for layer in status_response.json()["data"]["layers"] if layer["name"] == "market_snapshot"
+    ][0]
+    assert snapshot_layer["item_count"] >= 1
+    assert snapshot_layer["hit_count"] >= 1
 
 
 def test_market_snapshot_post_returns_data(monkeypatch) -> None:
     client = _build_client(monkeypatch)
 
-    def _fake_snapshots(symbols: list[str], fields: list[str] | None = None) -> SnapshotResult:
+    def _fake_snapshots(
+        symbols: list[str],
+        fields: list[str] | None = None,
+        source: str = "auto",
+    ) -> SnapshotResult:
         assert symbols == ["600519.SH"]
         assert fields == ["last_price"]
+        assert source == "auto"
         return SnapshotResult(
             items=[SnapshotItem(symbol="600519.SH", last_price=1688.88)],
             missing_symbols=[],

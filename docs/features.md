@@ -4,6 +4,115 @@
 
 ## 2026-05-18
 
+### 缓存状态接口
+
+实现范围：
+
+- 已实现 `GET /api/v1/cache/status` 只读接口。
+- 已实现进程内 TTL 缓存基础对象，支持写入、读取、删除、清空和状态快照。
+- 已返回缓存启用状态、缓存目录、运行期缓存层、条目数量、命中次数、未命中次数、淘汰次数、过期次数、最大 TTL 和缓存条目年龄。
+- 已返回缓存目录状态 `cache_dir_status`，用于判断缓存目录是否存在、是否为目录、父目录是否存在以及是否具备文件缓存落盘条件。
+- 当前接口提供运行期内存缓存状态；文件缓存覆盖范围、缓存预热任务和历史缓存索引尚未接入。
+
+验证结果：
+
+- `python -m compileall -q src tests` 通过。
+- `python -m pytest tests/unit/test_memory_cache.py tests/integration/test_api.py` 通过。
+- 已覆盖接口鉴权、状态响应、缓存目录状态、命中未命中统计和 TTL 过期统计。
+
+接口格式：
+
+```http
+GET /api/v1/cache/status
+```
+
+鉴权要求：
+
+- 需要请求头：`X-API-Key: <api-key>`。
+- 可选请求头：`X-Request-ID: <request-id>`。
+
+请求参数：
+
+- 无。
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": {
+    "status": "ok",
+    "enabled": true,
+    "cache_dir": "data/cache",
+    "cache_dir_status": {
+      "path": "data/cache",
+      "exists": true,
+      "is_dir": true,
+      "parent_exists": true,
+      "ready_for_file_cache": true
+    },
+    "layers": [
+      {
+        "name": "runtime",
+        "backend": "memory",
+        "enabled": true,
+        "item_count": 0,
+        "hit_count": 0,
+        "miss_count": 0,
+        "evicted_count": 0,
+        "expired_count": 0,
+        "max_ttl_seconds": null,
+        "oldest_item_age_seconds": null,
+        "newest_item_age_seconds": null
+      },
+      {
+        "name": "market_snapshot",
+        "backend": "memory",
+        "enabled": true,
+        "item_count": 0,
+        "hit_count": 0,
+        "miss_count": 0,
+        "evicted_count": 0,
+        "expired_count": 0,
+        "max_ttl_seconds": null,
+        "oldest_item_age_seconds": null,
+        "newest_item_age_seconds": null
+      }
+    ],
+    "capabilities": [
+      "memory_ttl_status",
+      "hit_miss_statistics",
+      "snapshot_cache_status"
+    ],
+    "notes": [
+      "当前接口提供进程内缓存状态；文件缓存覆盖范围和预热任务状态将在后续功能接入。"
+    ]
+  },
+  "meta": {
+    "server_time": "2026-05-18T10:50:00+08:00"
+  }
+}
+```
+
+错误响应：
+
+```json
+{
+  "success": false,
+  "code": "AUTH_MISSING_API_KEY",
+  "message": "缺少 API Key",
+  "request_id": "req_xxx",
+  "data": null,
+  "meta": {
+    "retryable": false,
+    "server_time": "2026-05-18T10:50:00+08:00"
+  }
+}
+```
+
 ### 历史 K 线接口
 
 实现范围：
@@ -108,6 +217,8 @@ limit   可选，最大返回条数，必须大于等于 1
 - 已实现 QMT 原始字段映射，输出 `last_price`、`pre_close`、`open`、`high`、`low`、`volume`、`amount`、`bid1`、`ask1` 等稳定字段。
 - 已实现缺失证券列表 `missing_symbols`，单个证券缺失不会导致整个请求失败。
 - 已实现 GET 和 POST 两种调用方式。
+- 已实现快照 TTL 缓存，`source=auto` 优先读取缓存并在缺失时回源 QMT，`source=cache` 仅读取缓存，`source=qmt` 强制回源。
+- 已在响应 `meta` 中返回 `source` 与 `cache`，用于区分缓存命中、缓存缺失、混合结果和 QMT 回源。
 
 验证结果：
 
@@ -118,7 +229,7 @@ limit   可选，最大返回条数，必须大于等于 1
 GET 接口格式：
 
 ```http
-GET /api/v1/market/snapshot?symbols=600519.SH,000001.SZ&fields=last_price,volume
+GET /api/v1/market/snapshot?symbols=600519.SH,000001.SZ&fields=last_price,volume&source=auto
 ```
 
 POST 接口格式：
@@ -138,6 +249,7 @@ GET 请求参数：
 ```text
 symbols  必填，逗号分隔的证券代码列表，例如 600519.SH,000001.SZ
 fields   可选，逗号分隔的字段列表，例如 last_price,volume
+source   可选，数据来源，auto | cache | qmt，默认 auto
 ```
 
 POST 请求体：
@@ -145,7 +257,8 @@ POST 请求体：
 ```json
 {
   "symbols": ["600519.SH", "000001.SZ"],
-  "fields": ["last_price", "volume"]
+  "fields": ["last_price", "volume"],
+  "source": "auto"
 }
 ```
 
@@ -177,7 +290,9 @@ POST 请求体：
   "meta": {
     "server_time": "2026-05-18T10:38:56+08:00",
     "missing_symbols": [],
-    "fields": ["last_price", "volume"]
+    "fields": ["last_price", "volume"],
+    "source": "qmt",
+    "cache": "miss"
   }
 }
 ```

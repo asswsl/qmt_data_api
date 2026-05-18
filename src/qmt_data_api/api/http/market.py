@@ -24,27 +24,32 @@ def get_snapshot(
     request: Request,
     symbols: str = Query(min_length=1),
     fields: str | None = None,
+    source: str = "auto",
 ) -> dict[str, object]:
-    result = get_market_snapshots(_split_csv(symbols) or [], _split_csv(fields))
+    result = get_market_snapshots(_split_csv(symbols) or [], _split_csv(fields), source)
     return success_response(
         request,
         data=[item.model_dump(exclude_none=True, exclude={"raw"}) for item in result.items],
         meta={
             "missing_symbols": result.missing_symbols,
             "fields": result.fields,
+            "source": result.source,
+            "cache": result.cache,
         },
     )
 
 
 @router.post("/snapshot")
 def post_snapshot(request: Request, payload: SnapshotRequest) -> dict[str, object]:
-    result = get_market_snapshots(payload.symbols, payload.fields)
+    result = get_market_snapshots(payload.symbols, payload.fields, payload.source)
     return success_response(
         request,
         data=[item.model_dump(exclude_none=True, exclude={"raw"}) for item in result.items],
         meta={
             "missing_symbols": result.missing_symbols,
             "fields": result.fields,
+            "source": result.source,
+            "cache": result.cache,
         },
     )
 
