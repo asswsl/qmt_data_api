@@ -42,6 +42,33 @@ def test_qmt_status_requires_api_key(monkeypatch) -> None:
     assert payload["code"] == ErrorCode.AUTH_MISSING_API_KEY
 
 
+def test_cache_status_requires_api_key(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    response = client.get("/api/v1/cache/status")
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    assert response.json()["code"] == ErrorCode.AUTH_MISSING_API_KEY
+
+
+def test_cache_status_returns_runtime_cache_data(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+    monkeypatch.setenv("CACHE_DIR", "data/test-cache")
+    clear_settings_cache()
+
+    response = client.get("/api/v1/cache/status", headers={"X-API-Key": "secret-key"})
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["status"] == "ok"
+    assert payload["data"]["enabled"] is True
+    assert payload["data"]["cache_dir"] == "data/test-cache"
+    assert payload["data"]["layers"][0]["name"] == "runtime"
+    assert payload["data"]["layers"][0]["backend"] == "memory"
+    assert "hit_count" in payload["data"]["layers"][0]
+
+
 def test_qmt_status_returns_probe_data(monkeypatch) -> None:
     client = _build_client(monkeypatch)
     monkeypatch.setattr(

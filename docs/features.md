@@ -4,6 +4,93 @@
 
 ## 2026-05-18
 
+### 缓存状态接口
+
+实现范围：
+
+- 已实现 `GET /api/v1/cache/status` 只读接口。
+- 已实现进程内 TTL 缓存基础对象，支持写入、读取、删除、清空和状态快照。
+- 已返回缓存启用状态、缓存目录、运行期缓存层、条目数量、命中次数、未命中次数、淘汰次数、过期次数、最大 TTL 和缓存条目年龄。
+- 当前接口提供运行期内存缓存状态；文件缓存覆盖范围、缓存预热任务和历史缓存索引尚未接入。
+
+验证结果：
+
+- `python -m compileall -q src tests` 通过。
+- `python -m pytest tests/unit/test_memory_cache.py tests/integration/test_api.py` 通过。
+- 已覆盖接口鉴权、状态响应、命中未命中统计和 TTL 过期统计。
+
+接口格式：
+
+```http
+GET /api/v1/cache/status
+```
+
+鉴权要求：
+
+- 需要请求头：`X-API-Key: <api-key>`。
+- 可选请求头：`X-Request-ID: <request-id>`。
+
+请求参数：
+
+- 无。
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": {
+    "status": "ok",
+    "enabled": true,
+    "cache_dir": "data/cache",
+    "layers": [
+      {
+        "name": "runtime",
+        "backend": "memory",
+        "enabled": true,
+        "item_count": 0,
+        "hit_count": 0,
+        "miss_count": 0,
+        "evicted_count": 0,
+        "expired_count": 0,
+        "max_ttl_seconds": null,
+        "oldest_item_age_seconds": null,
+        "newest_item_age_seconds": null
+      }
+    ],
+    "capabilities": [
+      "memory_ttl_status",
+      "hit_miss_statistics"
+    ],
+    "notes": [
+      "当前接口提供进程内缓存状态；文件缓存覆盖范围和预热任务状态将在后续功能接入。"
+    ]
+  },
+  "meta": {
+    "server_time": "2026-05-18T10:50:00+08:00"
+  }
+}
+```
+
+错误响应：
+
+```json
+{
+  "success": false,
+  "code": "AUTH_MISSING_API_KEY",
+  "message": "缺少 API Key",
+  "request_id": "req_xxx",
+  "data": null,
+  "meta": {
+    "retryable": false,
+    "server_time": "2026-05-18T10:50:00+08:00"
+  }
+}
+```
+
 ### 历史 K 线接口
 
 实现范围：
