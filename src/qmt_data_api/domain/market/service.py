@@ -5,8 +5,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from qmt_data_api.cache.keys import snapshot_key
+from qmt_data_api.cache.memory import snapshot_cache
+from qmt_data_api.cache.policies import snapshot_ttl_seconds
 from qmt_data_api.core.config import get_settings
 from qmt_data_api.domain.market.errors import (
+    cache_miss_error,
     invalid_adjust_error,
     invalid_period_error,
     invalid_symbol_error,
@@ -37,6 +41,7 @@ _DEFAULT_FIELDS = [
 _SUPPORTED_PERIODS = {"tick", "1m", "5m", "15m", "30m", "60m", "1d", "1w", "1mon"}
 _SUPPORTED_ADJUST = {"none", "front", "back"}
 _SUPPORTED_SOURCES = {"auto", "qmt"}
+_SUPPORTED_SNAPSHOT_SOURCES = {"auto", "cache", "qmt"}
 
 
 def _normalize_fields(fields: list[str] | None) -> list[str] | None:
@@ -62,7 +67,29 @@ def _normalize_date(value: str) -> str:
     raise invalid_time_range_error(value, value)
 
 
-def get_market_snapshots(symbols: list[str], fields: list[str] | None = None) -> SnapshotResult:
+def _cache_status(cached_count: int, fetched_count: int) -> str:
+    if cached_count and fetched_count:
+        return "mixed"
+    if cached_count:
+        return "hit"
+    return "miss"
+
+
+def _snapshot_source(cached_count: int, fetched_count: int, requested_source: str) -> str:
+    if requested_source == "cache":
+        return "cache"
+    if cached_count and fetched_count:
+        return "mixed"
+    if cached_count:
+        return "cache"
+    return "qmt"
+
+
+def get_market_snapshots(
+    symbols: list[str],
+    fields: list[str] | None = None,
+    source: str = "auto",
+) -> SnapshotResult:
     settings = get_settings()
     normalized_symbols = normalize_symbol_list(symbols)
     if not normalized_symbols:
@@ -74,8 +101,41 @@ def get_market_snapshots(symbols: list[str], fields: list[str] | None = None) ->
     if invalid_symbols:
         raise invalid_symbol_error(invalid_symbols)
 
+    normalized_source = source.strip().lower()
+    if normalized_source not in _SUPPORTED_SNAPSHOT_SOURCES:
+        raise unsupported_source_error(source)
+
     requested_fields = _normalize_fields(fields)
-    items, missing_symbols = fetch_xtdata_snapshots(normalized_symbols)
+    items_by_symbol = {}
+    cached_count = 0
+    fetched_count = 0
+    missing_symbols: list[str] = []
+
+    if normalized_source in {"auto", "cache"}:
+        for symbol in normalized_symbols:
+            item = snapshot_cache.get(snapshot_key(symbol))
+            if item is not None:
+                items_by_symbol[symbol] = item.model_copy(deep=True)
+                cached_count += 1
+
+    symbols_to_fetch = [
+        symbol
+        for symbol in normalized_symbols
+        if symbol not in items_by_symbol and normalized_source in {"auto", "qmt"}
+    ]
+    if symbols_to_fetch:
+        fetched_items, missing_symbols = fetch_xtdata_snapshots(symbols_to_fetch)
+        ttl_seconds = snapshot_ttl_seconds()
+        for item in fetched_items:
+            items_by_symbol[item.symbol] = item
+            fetched_count += 1
+            snapshot_cache.set(snapshot_key(item.symbol), item.model_copy(deep=True), ttl_seconds)
+    elif normalized_source == "cache":
+        missing_symbols = [symbol for symbol in normalized_symbols if symbol not in items_by_symbol]
+        if missing_symbols:
+            raise cache_miss_error(missing_symbols)
+
+    items = [items_by_symbol[symbol] for symbol in normalized_symbols if symbol in items_by_symbol]
     if requested_fields:
         allowed = {"symbol", *requested_fields}
         items = [
@@ -85,7 +145,13 @@ def get_market_snapshots(symbols: list[str], fields: list[str] | None = None) ->
             for item in items
         ]
 
-    return SnapshotResult(items=items, missing_symbols=missing_symbols, fields=requested_fields)
+    return SnapshotResult(
+        items=items,
+        missing_symbols=missing_symbols,
+        fields=requested_fields,
+        source=_snapshot_source(cached_count, fetched_count, normalized_source),
+        cache=_cache_status(cached_count, fetched_count),
+    )
 
 
 def get_market_klines(

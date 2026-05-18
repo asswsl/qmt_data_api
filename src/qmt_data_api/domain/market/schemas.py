@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 class SnapshotRequest(BaseModel):
     symbols: list[str] = Field(min_length=1)
     fields: list[str] | None = None
+    source: str = "auto"
 
 
 class SnapshotItem(BaseModel):
@@ -34,6 +35,8 @@ class SnapshotResult(BaseModel):
     items: list[SnapshotItem]
     missing_symbols: list[str]
     fields: list[str] | None = None
+    source: str = "qmt"
+    cache: str = "miss"
 
 
 class KlineBar(BaseModel):

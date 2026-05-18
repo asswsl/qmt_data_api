@@ -5,11 +5,13 @@ from qmt_data_api.core.config import clear_settings_cache
 from qmt_data_api.core.errors import ErrorCode, MarketDataError
 from qmt_data_api.domain.market.schemas import KlineBar, SnapshotItem
 from qmt_data_api.domain.market.service import get_market_klines, get_market_snapshots
+from qmt_data_api.cache.memory import snapshot_cache
 
 
 def test_market_snapshot_normalizes_symbols_and_reports_missing(monkeypatch) -> None:
     monkeypatch.setenv("MARKET_SNAPSHOT_MAX_SYMBOLS", "10")
     clear_settings_cache()
+    snapshot_cache.clear()
 
     def _fake_fetch(symbols: list[str]):
         assert symbols == ["600519.SH", "000001.SZ"]
@@ -33,6 +35,60 @@ def test_market_snapshot_normalizes_symbols_and_reports_missing(monkeypatch) -> 
     assert result.missing_symbols == ["000001.SZ"]
 
     clear_settings_cache()
+    snapshot_cache.clear()
+
+
+def test_market_snapshot_uses_cache_for_auto_source(monkeypatch) -> None:
+    monkeypatch.setenv("MARKET_SNAPSHOT_MAX_SYMBOLS", "10")
+    monkeypatch.setenv("MARKET_SNAPSHOT_CACHE_TTL_SECONDS", "30")
+    clear_settings_cache()
+    snapshot_cache.clear()
+    calls = {"count": 0}
+
+    def _fake_fetch(symbols: list[str]):
+        calls["count"] += 1
+        return (
+            [
+                SnapshotItem(
+                    symbol=symbol,
+                    last_price=10.0 + index,
+                )
+                for index, symbol in enumerate(symbols)
+            ],
+            [],
+        )
+
+    monkeypatch.setattr("qmt_data_api.domain.market.service.fetch_xtdata_snapshots", _fake_fetch)
+
+    first = get_market_snapshots(["600519.SH"], source="auto")
+    second = get_market_snapshots(["600519.SH"], source="auto")
+
+    assert calls["count"] == 1
+    assert first.cache == "miss"
+    assert first.source == "qmt"
+    assert second.cache == "hit"
+    assert second.source == "cache"
+    assert second.items[0].last_price == 10.0
+
+    clear_settings_cache()
+    snapshot_cache.clear()
+
+
+def test_market_snapshot_cache_source_raises_on_miss(monkeypatch) -> None:
+    monkeypatch.setenv("MARKET_SNAPSHOT_MAX_SYMBOLS", "10")
+    clear_settings_cache()
+    snapshot_cache.clear()
+
+    try:
+        get_market_snapshots(["600519.SH"], source="cache")
+    except MarketDataError as exc:
+        assert exc.code == ErrorCode.CACHE_MISS
+        assert exc.detail == {"symbols": ["600519.SH"]}
+    else:
+        raise AssertionError("expected MarketDataError")
+
+    clear_settings_cache()
+    snapshot_cache.clear()
 
 
 def test_market_snapshot_rejects_invalid_symbol(monkeypatch) -> None:

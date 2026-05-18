@@ -4,6 +4,113 @@
 
 ## 2026-05-18
 
+### 行情快照 TTL 内存缓存
+
+实现范围：
+
+- 已实现进程内 TTL 缓存 `MemoryTTLCache`。
+- 已实现快照缓存键：`market:snapshot:{symbol}`。
+- 已实现快照缓存 TTL 策略，默认 3 秒，可通过环境变量 `MARKET_SNAPSHOT_CACHE_TTL_SECONDS` 调整。
+- 已实现缓存统计：`size`、`hits`、`misses`、`sets`、`evictions`。
+- 行情快照接口已支持 `source=auto|cache|qmt`。
+- `source=auto`：优先读取缓存，缺失时读取 QMT 并回写缓存。
+- `source=cache`：只读取缓存，缺失时返回 `CACHE_MISS`。
+- `source=qmt`：强制读取 QMT，并刷新缓存。
+
+验证结果：
+
+- `python -m compileall -q src tests` 通过。
+- `python -m pytest tests/unit/test_market_service.py tests/integration/test_api.py` 通过，18 项相关测试全部通过。
+- 已执行真实 `get_market_snapshots(["600519.SH"], source="auto")` 连续探测，首次返回 `miss/qmt`，二次返回 `hit/cache`。
+
+行情快照缓存参数：
+
+```http
+GET /api/v1/market/snapshot?symbols=600519.SH&source=auto
+```
+
+```json
+{
+  "symbols": ["600519.SH"],
+  "fields": ["last_price", "volume"],
+  "source": "auto"
+}
+```
+
+成功响应元信息：
+
+```json
+{
+  "meta": {
+    "server_time": "2026-05-18T11:00:00+08:00",
+    "missing_symbols": [],
+    "fields": null,
+    "source": "cache",
+    "cache": "hit"
+  }
+}
+```
+
+缓存未命中错误：
+
+```json
+{
+  "success": false,
+  "code": "CACHE_MISS",
+  "message": "缓存中不存在请求的数据",
+  "request_id": "req_xxx",
+  "data": {
+    "symbols": ["600519.SH"]
+  },
+  "meta": {
+    "retryable": true,
+    "server_time": "2026-05-18T11:00:00+08:00"
+  }
+}
+```
+
+### 缓存状态接口
+
+接口格式：
+
+```http
+GET /api/v1/cache/status
+```
+
+鉴权要求：
+
+- 需要请求头：`X-API-Key: <api-key>`。
+- 可选请求头：`X-Request-ID: <request-id>`。
+
+请求参数：
+
+- 无。
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": {
+    "market_snapshot": {
+      "backend": "memory",
+      "ttl_seconds": 3,
+      "size": 1,
+      "hits": 1,
+      "misses": 1,
+      "sets": 1,
+      "evictions": 0
+    }
+  },
+  "meta": {
+    "server_time": "2026-05-18T11:00:00+08:00"
+  }
+}
+```
+
 ### 历史 K 线接口
 
 实现范围：
@@ -138,6 +245,7 @@ GET 请求参数：
 ```text
 symbols  必填，逗号分隔的证券代码列表，例如 600519.SH,000001.SZ
 fields   可选，逗号分隔的字段列表，例如 last_price,volume
+source   可选，数据来源，auto | cache | qmt，默认 auto
 ```
 
 POST 请求体：
