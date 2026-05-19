@@ -249,6 +249,15 @@ def test_cache_status_reports_snapshot_cache_stats(monkeypatch) -> None:
     assert snapshot_layer["hit_count"] >= 1
 
 
+def test_clear_kline_cache_requires_api_key(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    response = client.delete("/api/v1/cache/kline")
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    assert response.json()["code"] == ErrorCode.AUTH_MISSING_API_KEY
+
+
 def test_market_snapshot_post_returns_data(monkeypatch) -> None:
     client = _build_client(monkeypatch)
 
@@ -378,3 +387,40 @@ def test_market_kline_uses_file_cache_between_requests(monkeypatch, tmp_path) ->
     ][0]
     assert kline_layer["item_count"] >= 1
     assert kline_layer["hit_count"] >= 1
+
+
+def test_clear_kline_cache_removes_file_cache(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path / "cache"))
+    clear_settings_cache()
+    client = _build_client(monkeypatch)
+
+    def _fake_fetch(
+        symbol: str,
+        period: str,
+        start_time: str,
+        end_time: str,
+        adjust: str,
+        limit: int | None,
+    ):
+        return [KlineBar(trade_date="2024-01-02", close=1685.01)]
+
+    monkeypatch.setattr("qmt_data_api.domain.market.service.fetch_xtdata_klines", _fake_fetch)
+
+    client.get(
+        "/api/v1/market/kline?symbol=600519.SH&period=1d&start=20240101&end=20240110&limit=5",
+        headers={"X-API-Key": "secret-key"},
+    )
+    response = client.delete("/api/v1/cache/kline", headers={"X-API-Key": "secret-key"})
+    status_response = client.get("/api/v1/cache/status", headers={"X-API-Key": "secret-key"})
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["removed_count"] == 1
+    assert payload["data"]["layer"]["name"] == "kline_file"
+    assert payload["data"]["layer"]["item_count"] == 0
+    kline_layer = [
+        layer for layer in status_response.json()["data"]["layers"] if layer["name"] == "kline_file"
+    ][0]
+    assert kline_layer["item_count"] == 0
+    assert kline_layer["evicted_count"] >= 1

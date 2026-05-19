@@ -35,3 +35,28 @@ def test_kline_file_cache_tracks_status(monkeypatch, tmp_path) -> None:
     assert status.newest_item_age_seconds is not None
 
     clear_settings_cache()
+
+
+def test_kline_file_cache_clear_removes_cached_files(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path / "cache"))
+    clear_settings_cache()
+    cache = KlineFileCache()
+    payload = {
+        "symbol": "600519.SH",
+        "period": "1d",
+        "adjust": "none",
+        "source": "qmt",
+        "bars": [],
+    }
+    cache.set("600519.SH", "1d", "none", "20240101", "20240110", 5, payload)
+    cache.set("000001.SZ", "1d", "none", "20240101", "20240110", None, payload)
+
+    removed_count = cache.clear()
+
+    assert removed_count == 2
+    status = cache.status()
+    assert status.item_count == 0
+    assert status.evicted_count == 2
+    assert cache.get("600519.SH", "1d", "none", "20240101", "20240110", 5) is None
+
+    clear_settings_cache()

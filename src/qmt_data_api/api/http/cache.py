@@ -66,3 +66,19 @@ def cache_status(request: Request) -> dict[str, object]:
             ],
         },
     )
+
+
+@router.delete("/kline")
+def clear_kline_cache(request: Request) -> dict[str, object]:
+    kline_cache = get_kline_file_cache()
+    removed_count = kline_cache.clear()
+    return success_response(
+        request,
+        data={
+            "removed_count": removed_count,
+            "layer": {
+                "name": "kline_file",
+                **kline_cache.status().to_dict(),
+            },
+        },
+    )

@@ -62,6 +62,31 @@ class KlineFileCache:
                 json.dump(payload, file, ensure_ascii=False, separators=(",", ":"))
             tmp_path.replace(path)
 
+    def clear(self) -> int:
+        root = self._root()
+        removed_count = 0
+        with self._lock:
+            if not root.exists():
+                return removed_count
+            for path in root.rglob("*"):
+                if path.is_file() and path.suffix in {".json", ".tmp"}:
+                    try:
+                        path.unlink()
+                    except OSError:
+                        continue
+                    removed_count += 1
+            for directory in sorted(
+                [path for path in root.rglob("*") if path.is_dir()],
+                key=lambda item: len(item.parts),
+                reverse=True,
+            ):
+                try:
+                    directory.rmdir()
+                except OSError:
+                    continue
+            self._evicted_count += removed_count
+            return removed_count
+
     def status(self) -> CacheStatus:
         root = self._root()
         files = list(root.rglob("*.json")) if root.exists() else []

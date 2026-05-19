@@ -250,14 +250,15 @@ limit   可选，最大返回条数，必须大于等于 1
 - 已实现 `source=qmt` 强制回源 QMT，并刷新同参数文件缓存。
 - 已在响应 `meta` 中返回 `cache` 状态，当前支持 `hit` 与 `miss`。
 - 已在 `GET /api/v1/cache/status` 中新增 `kline_file` 缓存层，展示历史 K 线文件缓存条目数、命中次数、未命中次数、淘汰次数、过期次数和文件年龄。
+- 已实现 `DELETE /api/v1/cache/kline` 清理接口，可删除历史 K 线 JSON 缓存与写入过程遗留的临时文件，并返回删除数量和清理后的缓存层状态。
 - 当前文件缓存没有 TTL，也不做区间合并或增量补齐；这是历史缓存能力的第一步。
 
 验证结果：
 
 - `python -m compileall -q src tests` 通过。
-- `python -m pytest tests/unit/test_file_cache.py tests/unit/test_market_service.py tests/integration/test_api.py` 通过。
-- `python -m pytest` 通过，28 项全量测试通过。
-- 已覆盖首次请求回源 QMT、二次请求命中文件缓存、`source=cache` 缺失返回 `CACHE_MISS`、缓存状态接口返回 `kline_file` 层。
+- `python -m pytest tests/unit/test_file_cache.py tests/unit/test_market_service.py tests/integration/test_api.py` 通过，28 项相关测试通过。
+- `python -m pytest` 通过，31 项全量测试通过。
+- 已覆盖首次请求回源 QMT、二次请求命中文件缓存、`source=cache` 缺失返回 `CACHE_MISS`、缓存状态接口返回 `kline_file` 层、清理接口鉴权与删除行为。
 
 K 线接口格式：
 
@@ -344,6 +345,51 @@ limit   可选，最大返回条数，必须大于等于 1
   "max_ttl_seconds": null,
   "oldest_item_age_seconds": 3.2,
   "newest_item_age_seconds": 3.2
+}
+```
+
+清理接口格式：
+
+```http
+DELETE /api/v1/cache/kline
+```
+
+鉴权要求：
+
+- 需要请求头：`X-API-Key: <api-key>`。
+- 可选请求头：`X-Request-ID: <request-id>`。
+
+请求参数：
+
+- 无。
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": {
+    "removed_count": 1,
+    "layer": {
+      "name": "kline_file",
+      "backend": "json_file",
+      "enabled": true,
+      "item_count": 0,
+      "hit_count": 1,
+      "miss_count": 1,
+      "evicted_count": 1,
+      "expired_count": 0,
+      "max_ttl_seconds": null,
+      "oldest_item_age_seconds": null,
+      "newest_item_age_seconds": null
+    }
+  },
+  "meta": {
+    "server_time": "2026-05-19T10:45:00+08:00"
+  }
 }
 ```
 

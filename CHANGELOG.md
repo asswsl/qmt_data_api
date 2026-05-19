@@ -10,6 +10,7 @@
 - 历史 K 线接口新增 `source=cache` 只读缓存模式；缓存缺失时返回统一 `CACHE_MISS` 错误。
 - 历史 K 线接口响应 `meta` 新增 `cache` 字段，用于标识 `hit` 或 `miss`。
 - 缓存状态接口新增 `kline_file` 缓存层与 `kline_file_cache_status` 能力标识，用于查看历史 K 线文件缓存条目数、命中次数和未命中次数。
+- 新增历史 K 线文件缓存清理接口 `DELETE /api/v1/cache/kline`，用于删除本地 K 线 JSON 缓存并返回清理后的缓存层状态。
 - 新增历史 K 线文件缓存单元测试与接口集成测试，覆盖首次回源、二次命中、只读缓存缺失和状态统计。
 - 新增结构化访问日志中间件，记录请求 ID、方法、路径、状态码、耗时、客户端 IP、错误码和脱敏 API Key 指纹。
 - 统一错误响应会将应用错误码写入请求状态，便于访问日志关联失败原因。
@@ -39,8 +40,8 @@
 ### Validation
 
 - 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
-- 已执行 `python -m pytest tests/unit/test_file_cache.py tests/unit/test_market_service.py tests/integration/test_api.py`，历史 K 线文件缓存相关测试通过。
-- 已执行 `python -m pytest`，28 项全量测试通过。
+- 已执行 `python -m pytest tests/unit/test_file_cache.py tests/unit/test_market_service.py tests/integration/test_api.py`，28 项历史 K 线文件缓存相关测试通过。
+- 已执行 `python -m pytest`，31 项全量测试通过。
 - 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
 - 已执行 `python -m pytest tests/integration/test_api.py`，访问日志与 API 集成测试通过。
 - 已执行 `python -m pytest tests/unit/test_memory_cache.py tests/integration/test_api.py`，缓存状态接口、缓存目录状态与内存缓存相关测试通过。
