@@ -2,10 +2,35 @@
 
 本文档记录本仓库的重要变更。每次 agent 完成变更后，都应同步更新此文件。
 
+## 2026-05-19
+
+### Changed
+
+- 新增证券基础信息接口 `GET/POST /api/v1/instruments`，支持按证券代码查询名称、市场、证券类型、上市状态与缺失证券列表。
+- 新增交易日历接口 `GET /api/v1/calendar/trading-days`，支持查询市场交易日、上一交易日、下一交易日，并在 `source=auto` 下提供本地工作日兜底。
+- 新增批量历史 K 线接口 `POST /api/v1/market/klines`，支持多证券一次性拉取历史 K 线、字段裁剪、缓存命中状态和缺失证券列表。
+- 新增最近 K 线接口 `GET /api/v1/market/kline/latest`，支持按 `count` 获取单证券最近 K 线，用于远程客户端准实时刷新。
+- 历史 K 线接口新增 `fields` 参数，可按需返回 `trade_date`、`close`、`volume` 等指定字段，减少跨机器传输体积。
+- 新增轻量 Python 客户端 `qmt_data_api.client.QmtDataClient`，封装快照、单证券 K 线、批量 K 线、最近 K 线、证券基础信息和交易日历调用。
+- 新增可选限流中间件，支持通过 `API_RATE_LIMIT_ENABLED`、`API_RATE_LIMIT_REQUESTS` 和 `API_RATE_LIMIT_WINDOW_SECONDS` 控制远程请求频率。
+- 完善新增业务接口的 OpenAPI `summary` 与 `description`，便于通过 `/docs` 直接调试。
+
+### Validation
+
+- 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
+- 已执行 `python -m pytest tests/unit/test_config.py tests/unit/test_client.py tests/unit/test_market_service.py tests/integration/test_api.py`，34 项投入使用相关接口与客户端测试通过。
+- 已执行 `python -m pytest`，38 项全量测试通过。
+
 ## 2026-05-18
 
 ### Changed
 
+- 新增历史 K 线 JSON 文件缓存，`GET /api/v1/market/kline` 在 `source=auto` 时优先读取本地文件缓存，未命中后回源 QMT 并写入缓存。
+- 历史 K 线接口新增 `source=cache` 只读缓存模式；缓存缺失时返回统一 `CACHE_MISS` 错误。
+- 历史 K 线接口响应 `meta` 新增 `cache` 字段，用于标识 `hit` 或 `miss`。
+- 缓存状态接口新增 `kline_file` 缓存层与 `kline_file_cache_status` 能力标识，用于查看历史 K 线文件缓存条目数、命中次数和未命中次数。
+- 新增历史 K 线文件缓存清理接口 `DELETE /api/v1/cache/kline`，用于删除本地 K 线 JSON 缓存并返回清理后的缓存层状态。
+- 新增历史 K 线文件缓存单元测试与接口集成测试，覆盖首次回源、二次命中、只读缓存缺失和状态统计。
 - 新增结构化访问日志中间件，记录请求 ID、方法、路径、状态码、耗时、客户端 IP、错误码和脱敏 API Key 指纹。
 - 统一错误响应会将应用错误码写入请求状态，便于访问日志关联失败原因。
 - 新增访问日志集成测试，覆盖成功请求、鉴权失败请求和敏感密钥不落日志。
@@ -33,6 +58,9 @@
 
 ### Validation
 
+- 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
+- 已执行 `python -m pytest tests/unit/test_file_cache.py tests/unit/test_market_service.py tests/integration/test_api.py`，28 项历史 K 线文件缓存相关测试通过。
+- 已执行 `python -m pytest`，31 项全量测试通过。
 - 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
 - 已执行 `python -m pytest tests/integration/test_api.py`，访问日志与 API 集成测试通过。
 - 已执行 `python -m pytest tests/unit/test_memory_cache.py tests/integration/test_api.py`，缓存状态接口、缓存目录状态与内存缓存相关测试通过。

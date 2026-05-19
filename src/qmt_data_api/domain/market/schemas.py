@@ -14,6 +14,17 @@ class SnapshotRequest(BaseModel):
     source: str = "auto"
 
 
+class KlineBatchRequest(BaseModel):
+    symbols: list[str] = Field(min_length=1)
+    period: str = "1d"
+    start: str
+    end: str
+    adjust: str = "none"
+    source: str = "auto"
+    limit: int | None = Field(default=None, ge=1)
+    fields: list[str] | None = None
+
+
 class SnapshotItem(BaseModel):
     symbol: str
     quote_time: str | None = None
@@ -58,3 +69,12 @@ class KlineResult(BaseModel):
     adjust: str
     source: str
     bars: list[KlineBar]
+    cache: str = "miss"
+
+
+class KlineBatchResult(BaseModel):
+    items: list[KlineResult]
+    missing_symbols: list[str]
+    fields: list[str] | None = None
+    source: str = "qmt"
+    cache: str = "miss"

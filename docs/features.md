@@ -2,6 +2,195 @@
 
 本文档记录已经完整实现并验证通过的功能。每次完成一个功能后，都要追加日期、功能名称、实现范围、验证结果；如果功能包含 API 接口，必须写清楚接口格式。
 
+## 2026-05-19
+
+### 可投入使用 API 能力集
+
+实现范围：
+
+- 已实现证券基础信息接口，可让远程客户端在展示行情前获取证券名称、市场、类型、状态等元数据。
+- 已实现交易日历接口，可查询区间交易日、上一交易日和下一交易日；`source=auto` 在 QMT 日历不可用时回退为本地工作日历。
+- 已实现批量历史 K 线接口，可一次请求多只证券，减少远程客户端循环调用成本。
+- 已实现最近 K 线接口，可按 `count` 拉取最新分钟线或日线数据，适合准实时刷新。
+- 已实现历史 K 线字段裁剪，支持只返回客户端需要的字段。
+- 已实现轻量 Python 客户端 `QmtDataClient`，便于其它电脑直接调用主机 API。
+- 已实现可选接口限流，默认关闭，开启后可保护主机 QMT 数据链路。
+- 已为新增业务接口补充 OpenAPI 摘要和说明，可通过 `/docs` 调试。
+
+验证结果：
+
+- `python -m compileall -q src tests` 通过。
+- `python -m pytest tests/unit/test_config.py tests/unit/test_client.py tests/unit/test_market_service.py tests/integration/test_api.py` 通过，34 项相关测试通过。
+- `python -m pytest` 通过，38 项全量测试通过。
+
+证券基础信息接口：
+
+```http
+GET /api/v1/instruments?symbols=600519.SH,000001.SZ&source=auto
+POST /api/v1/instruments
+```
+
+鉴权要求：
+
+- 需要请求头：`X-API-Key: <api-key>`。
+
+POST 请求体：
+
+```json
+{
+  "symbols": ["600519.SH", "000001.SZ"],
+  "source": "auto"
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": [
+    {
+      "symbol": "600519.SH",
+      "name": "贵州茅台",
+      "market": "SH",
+      "instrument_type": "stock"
+    }
+  ],
+  "meta": {
+    "server_time": "2026-05-19T10:00:00+08:00",
+    "missing_symbols": [],
+    "source": "qmt"
+  }
+}
+```
+
+交易日历接口：
+
+```http
+GET /api/v1/calendar/trading-days?market=SH&start=20260101&end=20260131&source=auto
+```
+
+请求参数：
+
+```text
+market  可选，市场代码，例如 SH、SZ，默认 SH
+start   必填，开始日期，支持 YYYYMMDD 或 YYYY-MM-DD
+end     必填，结束日期，支持 YYYYMMDD 或 YYYY-MM-DD
+source  可选，auto | qmt | local，默认 auto
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": {
+    "market": "SH",
+    "start": "2026-01-01",
+    "end": "2026-01-31",
+    "trading_days": ["2026-01-02", "2026-01-05"],
+    "previous_trading_day": "2025-12-31",
+    "next_trading_day": "2026-02-02",
+    "source": "qmt"
+  },
+  "meta": {
+    "server_time": "2026-05-19T10:00:00+08:00",
+    "source": "qmt",
+    "count": 2
+  }
+}
+```
+
+批量历史 K 线接口：
+
+```http
+POST /api/v1/market/klines
+```
+
+请求体：
+
+```json
+{
+  "symbols": ["600519.SH", "000001.SZ"],
+  "period": "1d",
+  "start": "20240101",
+  "end": "20240110",
+  "adjust": "none",
+  "source": "auto",
+  "limit": 5,
+  "fields": ["trade_date", "close", "volume"]
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": [
+    {
+      "symbol": "600519.SH",
+      "period": "1d",
+      "adjust": "none",
+      "bars": [
+        {
+          "trade_date": "2024-01-02",
+          "close": 1685.01,
+          "volume": 32156.0
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "server_time": "2026-05-19T10:00:00+08:00",
+    "missing_symbols": [],
+    "fields": ["trade_date", "close", "volume"],
+    "source": "qmt",
+    "cache": "miss",
+    "count": 1
+  }
+}
+```
+
+最近 K 线接口：
+
+```http
+GET /api/v1/market/kline/latest?symbol=600519.SH&period=1m&count=240&fields=time,close,volume
+```
+
+Python 客户端示例：
+
+```python
+from qmt_data_api.client import QmtDataClient
+
+client = QmtDataClient("http://主机IP:8000", "secret-key")
+snapshot = client.get_snapshot(["600519.SH"], fields=["last_price", "volume"])
+klines = client.get_klines(
+    ["600519.SH", "000001.SZ"],
+    period="1d",
+    start="20240101",
+    end="20240110",
+    fields=["trade_date", "close"],
+)
+```
+
+限流配置：
+
+```text
+API_RATE_LIMIT_ENABLED=false
+API_RATE_LIMIT_REQUESTS=120
+API_RATE_LIMIT_WINDOW_SECONDS=60
+```
+
 ## 2026-05-18
 
 ### 访问日志中间件
@@ -235,6 +424,160 @@ limit   可选，最大返回条数，必须大于等于 1
   "meta": {
     "retryable": false,
     "server_time": "2026-05-18T10:45:00+08:00"
+  }
+}
+```
+
+### 历史 K 线文件缓存
+
+实现范围：
+
+- 已实现历史 K 线 JSON 文件缓存，缓存位置为 `CACHE_DIR/klines/<symbol>/<period>/<adjust>/<start>_<end>_limit-<limit>.json`。
+- 已实现完整请求参数粒度缓存，缓存键包含证券代码、周期、复权类型、开始日期、结束日期和返回条数。
+- 已实现 `source=auto` 优先读取文件缓存；未命中时回源 QMT，成功后写入本地 JSON 文件。
+- 已实现 `source=cache` 只读文件缓存；缺失时返回 `CACHE_MISS`，不会触发 QMT 回源。
+- 已实现 `source=qmt` 强制回源 QMT，并刷新同参数文件缓存。
+- 已在响应 `meta` 中返回 `cache` 状态，当前支持 `hit` 与 `miss`。
+- 已在 `GET /api/v1/cache/status` 中新增 `kline_file` 缓存层，展示历史 K 线文件缓存条目数、命中次数、未命中次数、淘汰次数、过期次数和文件年龄。
+- 已实现 `DELETE /api/v1/cache/kline` 清理接口，可删除历史 K 线 JSON 缓存与写入过程遗留的临时文件，并返回删除数量和清理后的缓存层状态。
+- 当前文件缓存没有 TTL，也不做区间合并或增量补齐；这是历史缓存能力的第一步。
+
+验证结果：
+
+- `python -m compileall -q src tests` 通过。
+- `python -m pytest tests/unit/test_file_cache.py tests/unit/test_market_service.py tests/integration/test_api.py` 通过，28 项相关测试通过。
+- `python -m pytest` 通过，31 项全量测试通过。
+- 已覆盖首次请求回源 QMT、二次请求命中文件缓存、`source=cache` 缺失返回 `CACHE_MISS`、缓存状态接口返回 `kline_file` 层、清理接口鉴权与删除行为。
+
+K 线接口格式：
+
+```http
+GET /api/v1/market/kline?symbol=600519.SH&period=1d&start=20240101&end=20240110&adjust=none&source=auto&limit=5
+```
+
+鉴权要求：
+
+- 需要请求头：`X-API-Key: <api-key>`。
+- 可选请求头：`X-Request-ID: <request-id>`。
+
+请求参数：
+
+```text
+symbol  必填，证券代码，例如 600519.SH
+period  可选，K 线周期，默认 1d；支持 tick | 1m | 5m | 15m | 30m | 60m | 1d | 1w | 1mon
+start   必填，开始日期，支持 YYYYMMDD 或 YYYY-MM-DD
+end     必填，结束日期，支持 YYYYMMDD 或 YYYY-MM-DD
+adjust  可选，复权类型：none | front | back，默认 none
+source  可选，数据来源：auto | cache | qmt，默认 auto
+limit   可选，最大返回条数，必须大于等于 1
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": {
+    "symbol": "600519.SH",
+    "period": "1d",
+    "adjust": "none",
+    "bars": [
+      {
+        "time": "2024-01-02T00:00:00+08:00",
+        "trade_date": "2024-01-02",
+        "close": 1685.01
+      }
+    ]
+  },
+  "meta": {
+    "server_time": "2026-05-18T10:45:00+08:00",
+    "source": "cache",
+    "cache": "hit",
+    "count": 1
+  }
+}
+```
+
+缓存缺失响应：
+
+```json
+{
+  "success": false,
+  "code": "CACHE_MISS",
+  "message": "缓存缺失",
+  "request_id": "req_xxx",
+  "data": {
+    "symbols": ["600519.SH"]
+  },
+  "meta": {
+    "retryable": false,
+    "server_time": "2026-05-18T10:45:00+08:00"
+  }
+}
+```
+
+缓存状态接口补充：
+
+```json
+{
+  "name": "kline_file",
+  "backend": "json_file",
+  "enabled": true,
+  "item_count": 1,
+  "hit_count": 1,
+  "miss_count": 1,
+  "evicted_count": 0,
+  "expired_count": 0,
+  "max_ttl_seconds": null,
+  "oldest_item_age_seconds": 3.2,
+  "newest_item_age_seconds": 3.2
+}
+```
+
+清理接口格式：
+
+```http
+DELETE /api/v1/cache/kline
+```
+
+鉴权要求：
+
+- 需要请求头：`X-API-Key: <api-key>`。
+- 可选请求头：`X-Request-ID: <request-id>`。
+
+请求参数：
+
+- 无。
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": {
+    "removed_count": 1,
+    "layer": {
+      "name": "kline_file",
+      "backend": "json_file",
+      "enabled": true,
+      "item_count": 0,
+      "hit_count": 1,
+      "miss_count": 1,
+      "evicted_count": 1,
+      "expired_count": 0,
+      "max_ttl_seconds": null,
+      "oldest_item_age_seconds": null,
+      "newest_item_age_seconds": null
+    }
+  },
+  "meta": {
+    "server_time": "2026-05-19T10:45:00+08:00"
   }
 }
 ```
