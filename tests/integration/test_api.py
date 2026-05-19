@@ -10,6 +10,8 @@ from qmt_data_api.app import create_app
 from qmt_data_api.cache.memory import get_snapshot_cache
 from qmt_data_api.core.config import clear_settings_cache
 from qmt_data_api.core.errors import ErrorCode, QmtError
+from qmt_data_api.domain.calendar.schemas import TradingCalendarResult
+from qmt_data_api.domain.instrument.schemas import InstrumentInfo, InstrumentResult
 from qmt_data_api.domain.market.schemas import KlineBar, KlineResult, SnapshotItem, SnapshotResult
 from qmt_data_api.middleware.access_log import ACCESS_LOGGER_NAME
 
@@ -143,6 +145,77 @@ def test_qmt_status_returns_probe_data(monkeypatch) -> None:
     payload = response.json()
     assert payload["success"] is True
     assert payload["data"]["connected"] is True
+
+
+def test_instruments_returns_metadata(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    def _fake_instruments(symbols: list[str], source: str = "auto") -> InstrumentResult:
+        assert symbols == ["600519.SH", "000001.SZ"]
+        assert source == "local"
+        return InstrumentResult(
+            items=[
+                InstrumentInfo(
+                    symbol="600519.SH",
+                    name="贵州茅台",
+                    market="SH",
+                    instrument_type="stock",
+                )
+            ],
+            missing_symbols=["000001.SZ"],
+            source="local",
+        )
+
+    monkeypatch.setattr("qmt_data_api.api.http.instruments.get_instruments", _fake_instruments)
+
+    response = client.get(
+        "/api/v1/instruments?symbols=600519.SH,000001.SZ&source=local",
+        headers={"X-API-Key": "secret-key"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert payload["data"][0]["symbol"] == "600519.SH"
+    assert payload["data"][0]["name"] == "贵州茅台"
+    assert payload["meta"]["missing_symbols"] == ["000001.SZ"]
+    assert payload["meta"]["source"] == "local"
+
+
+def test_trading_calendar_returns_days(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    def _fake_calendar(
+        market: str,
+        start: str,
+        end: str,
+        source: str = "auto",
+    ) -> TradingCalendarResult:
+        assert market == "SH"
+        assert start == "20260101"
+        assert end == "20260105"
+        assert source == "local"
+        return TradingCalendarResult(
+            market="SH",
+            start="2026-01-01",
+            end="2026-01-05",
+            trading_days=["2026-01-01", "2026-01-02", "2026-01-05"],
+            previous_trading_day="2025-12-31",
+            next_trading_day="2026-01-06",
+            source="local",
+        )
+
+    monkeypatch.setattr("qmt_data_api.api.http.calendar.get_trading_calendar", _fake_calendar)
+
+    response = client.get(
+        "/api/v1/calendar/trading-days?market=SH&start=20260101&end=20260105&source=local",
+        headers={"X-API-Key": "secret-key"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert payload["data"]["trading_days"] == ["2026-01-01", "2026-01-02", "2026-01-05"]
+    assert payload["meta"]["source"] == "local"
+    assert payload["meta"]["count"] == 3
 
 
 def test_status_summary_degrades_when_qmt_probe_fails(monkeypatch) -> None:
@@ -344,6 +417,118 @@ def test_market_kline_returns_bars(monkeypatch) -> None:
     assert payload["meta"]["count"] == 1
 
 
+def test_market_kline_supports_field_filter(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    def _fake_klines(
+        symbol: str,
+        period: str,
+        start: str,
+        end: str,
+        adjust: str = "none",
+        source: str = "auto",
+        limit: int | None = None,
+    ) -> KlineResult:
+        return KlineResult(
+            symbol=symbol,
+            period=period,
+            adjust=adjust,
+            source="qmt",
+            bars=[KlineBar(trade_date="2024-01-02", open=1.0, close=2.0, volume=100)],
+        )
+
+    monkeypatch.setattr("qmt_data_api.api.http.market.get_market_klines", _fake_klines)
+
+    response = client.get(
+        "/api/v1/market/kline"
+        "?symbol=600519.SH&period=1d&start=20240101&end=20240110&fields=trade_date,close",
+        headers={"X-API-Key": "secret-key"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert payload["data"]["bars"] == [{"trade_date": "2024-01-02", "close": 2.0}]
+    assert payload["meta"]["fields"] == ["trade_date", "close"]
+
+
+def test_market_klines_batch_returns_multi_symbol_data(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path / "cache"))
+    clear_settings_cache()
+    client = _build_client(monkeypatch)
+
+    def _fake_fetch(
+        symbol: str,
+        period: str,
+        start_time: str,
+        end_time: str,
+        adjust: str,
+        limit: int | None,
+    ):
+        return [KlineBar(trade_date="2024-01-02", close=1685.01)]
+
+    monkeypatch.setattr("qmt_data_api.domain.market.service.fetch_xtdata_klines", _fake_fetch)
+
+    response = client.post(
+        "/api/v1/market/klines",
+        headers={"X-API-Key": "secret-key"},
+        json={
+            "symbols": ["600519.SH", "000001.SZ"],
+            "period": "1d",
+            "start": "20240101",
+            "end": "20240110",
+            "limit": 5,
+            "fields": ["trade_date", "close"],
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert [item["symbol"] for item in payload["data"]] == ["600519.SH", "000001.SZ"]
+    assert payload["data"][0]["bars"] == [{"trade_date": "2024-01-02", "close": 1685.01}]
+    assert payload["meta"]["count"] == 2
+    assert payload["meta"]["fields"] == ["trade_date", "close"]
+
+
+def test_market_latest_kline_returns_recent_count(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    def _fake_klines(
+        symbol: str,
+        period: str,
+        start: str,
+        end: str,
+        adjust: str = "none",
+        source: str = "auto",
+        limit: int | None = None,
+    ) -> KlineResult:
+        assert symbol == "600519.SH"
+        assert period == "1m"
+        assert start == "19700101"
+        assert limit == 2
+        return KlineResult(
+            symbol=symbol,
+            period=period,
+            adjust=adjust,
+            source="qmt",
+            bars=[
+                KlineBar(time="2024-01-02T09:31:00+08:00", close=1.0),
+                KlineBar(time="2024-01-02T09:32:00+08:00", close=2.0),
+            ],
+        )
+
+    monkeypatch.setattr("qmt_data_api.api.http.market.get_market_klines", _fake_klines)
+
+    response = client.get(
+        "/api/v1/market/kline/latest?symbol=600519.SH&period=1m&count=2&fields=time,close",
+        headers={"X-API-Key": "secret-key"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert payload["meta"]["count"] == 2
+    assert payload["data"]["bars"][1] == {"time": "2024-01-02T09:32:00+08:00", "close": 2.0}
+
+
 def test_market_kline_uses_file_cache_between_requests(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("CACHE_DIR", str(tmp_path / "cache"))
     clear_settings_cache()
@@ -424,3 +609,17 @@ def test_clear_kline_cache_removes_file_cache(monkeypatch, tmp_path) -> None:
     ][0]
     assert kline_layer["item_count"] == 0
     assert kline_layer["evicted_count"] >= 1
+
+
+def test_rate_limit_blocks_excess_requests(monkeypatch) -> None:
+    monkeypatch.setenv("API_RATE_LIMIT_ENABLED", "true")
+    monkeypatch.setenv("API_RATE_LIMIT_REQUESTS", "1")
+    monkeypatch.setenv("API_RATE_LIMIT_WINDOW_SECONDS", "60")
+    client = _build_client(monkeypatch)
+
+    first_response = client.get("/api/v1/health", headers={"X-API-Key": "secret-key"})
+    second_response = client.get("/api/v1/health", headers={"X-API-Key": "secret-key"})
+
+    assert first_response.status_code == HTTPStatus.OK
+    assert second_response.status_code == HTTPStatus.TOO_MANY_REQUESTS
+    assert second_response.json()["code"] == "RATE_LIMIT_EXCEEDED"

@@ -33,6 +33,9 @@ class Settings:
     cache_dir: str
     market_snapshot_max_symbols: int
     market_snapshot_cache_ttl_seconds: int
+    api_rate_limit_enabled: bool
+    api_rate_limit_requests: int
+    api_rate_limit_window_seconds: int
     qmt_enable_trade_api: bool
     qmt_enable_real_order: bool
 
@@ -51,6 +54,9 @@ def get_settings() -> Settings:
         cache_dir=os.getenv("CACHE_DIR", "data/cache"),
         market_snapshot_max_symbols=int(os.getenv("MARKET_SNAPSHOT_MAX_SYMBOLS", "200")),
         market_snapshot_cache_ttl_seconds=int(os.getenv("MARKET_SNAPSHOT_CACHE_TTL_SECONDS", "3")),
+        api_rate_limit_enabled=_parse_bool(os.getenv("API_RATE_LIMIT_ENABLED"), False),
+        api_rate_limit_requests=int(os.getenv("API_RATE_LIMIT_REQUESTS", "120")),
+        api_rate_limit_window_seconds=int(os.getenv("API_RATE_LIMIT_WINDOW_SECONDS", "60")),
         qmt_enable_trade_api=_parse_bool(os.getenv("QMT_ENABLE_TRADE_API"), False),
         qmt_enable_real_order=_parse_bool(os.getenv("QMT_ENABLE_REAL_ORDER"), False),
     )

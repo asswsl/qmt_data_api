@@ -2,6 +2,25 @@
 
 本文档记录本仓库的重要变更。每次 agent 完成变更后，都应同步更新此文件。
 
+## 2026-05-19
+
+### Changed
+
+- 新增证券基础信息接口 `GET/POST /api/v1/instruments`，支持按证券代码查询名称、市场、证券类型、上市状态与缺失证券列表。
+- 新增交易日历接口 `GET /api/v1/calendar/trading-days`，支持查询市场交易日、上一交易日、下一交易日，并在 `source=auto` 下提供本地工作日兜底。
+- 新增批量历史 K 线接口 `POST /api/v1/market/klines`，支持多证券一次性拉取历史 K 线、字段裁剪、缓存命中状态和缺失证券列表。
+- 新增最近 K 线接口 `GET /api/v1/market/kline/latest`，支持按 `count` 获取单证券最近 K 线，用于远程客户端准实时刷新。
+- 历史 K 线接口新增 `fields` 参数，可按需返回 `trade_date`、`close`、`volume` 等指定字段，减少跨机器传输体积。
+- 新增轻量 Python 客户端 `qmt_data_api.client.QmtDataClient`，封装快照、单证券 K 线、批量 K 线、最近 K 线、证券基础信息和交易日历调用。
+- 新增可选限流中间件，支持通过 `API_RATE_LIMIT_ENABLED`、`API_RATE_LIMIT_REQUESTS` 和 `API_RATE_LIMIT_WINDOW_SECONDS` 控制远程请求频率。
+- 完善新增业务接口的 OpenAPI `summary` 与 `description`，便于通过 `/docs` 直接调试。
+
+### Validation
+
+- 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
+- 已执行 `python -m pytest tests/unit/test_config.py tests/unit/test_client.py tests/unit/test_market_service.py tests/integration/test_api.py`，34 项投入使用相关接口与客户端测试通过。
+- 已执行 `python -m pytest`，38 项全量测试通过。
+
 ## 2026-05-18
 
 ### Changed

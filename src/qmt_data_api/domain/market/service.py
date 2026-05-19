@@ -19,7 +19,7 @@ from qmt_data_api.domain.market.errors import (
     too_many_symbols_error,
     unsupported_source_error,
 )
-from qmt_data_api.domain.market.schemas import KlineResult, SnapshotResult
+from qmt_data_api.domain.market.schemas import KlineBatchResult, KlineResult, SnapshotResult
 from qmt_data_api.providers.qmt.xtdata_adapter import fetch_xtdata_klines, fetch_xtdata_snapshots
 from qmt_data_api.utils.symbols import is_valid_symbol, normalize_symbol_list
 
@@ -43,6 +43,18 @@ _SUPPORTED_PERIODS = {"tick", "1m", "5m", "15m", "30m", "60m", "1d", "1w", "1mon
 _SUPPORTED_ADJUST = {"none", "front", "back"}
 _SUPPORTED_SOURCES = {"auto", "cache", "qmt"}
 _SUPPORTED_SNAPSHOT_SOURCES = {"auto", "cache", "qmt"}
+_KLINE_FIELDS = {
+    "time",
+    "trade_date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "amount",
+    "pre_close",
+    "suspend_flag",
+}
 
 
 def _normalize_fields(fields: list[str] | None) -> list[str] | None:
@@ -234,3 +246,62 @@ def get_market_klines(
         result.model_dump(mode="json"),
     )
     return result
+
+
+def get_market_klines_batch(
+    symbols: list[str],
+    period: str,
+    start: str,
+    end: str,
+    adjust: str = "none",
+    source: str = "auto",
+    limit: int | None = None,
+    fields: list[str] | None = None,
+) -> KlineBatchResult:
+    settings = get_settings()
+    normalized_symbols = normalize_symbol_list(symbols)
+    if not normalized_symbols:
+        raise invalid_symbol_error(symbols)
+    if len(normalized_symbols) > settings.market_snapshot_max_symbols:
+        raise too_many_symbols_error(len(normalized_symbols), settings.market_snapshot_max_symbols)
+
+    invalid_symbols = [symbol for symbol in normalized_symbols if not is_valid_symbol(symbol)]
+    if invalid_symbols:
+        raise invalid_symbol_error(invalid_symbols)
+
+    requested_fields = _normalize_kline_fields(fields)
+    items: list[KlineResult] = []
+    missing_symbols: list[str] = []
+    for symbol in normalized_symbols:
+        result = get_market_klines(symbol, period, start, end, adjust, source, limit)
+        if not result.bars:
+            missing_symbols.append(symbol)
+        items.append(_filter_kline_result(result, requested_fields))
+
+    fetched_count = len([item for item in items if item.cache == "miss"])
+    cached_count = len([item for item in items if item.cache == "hit"])
+    return KlineBatchResult(
+        items=items,
+        missing_symbols=missing_symbols,
+        fields=requested_fields,
+        source=_snapshot_source(cached_count, fetched_count, source.strip().lower()),
+        cache=_cache_status(cached_count, fetched_count),
+    )
+
+
+def _normalize_kline_fields(fields: list[str] | None) -> list[str] | None:
+    normalized = _normalize_fields(fields)
+    if normalized is None:
+        return None
+    return [field for field in normalized if field in _KLINE_FIELDS]
+
+
+def _filter_kline_result(result: KlineResult, fields: list[str] | None) -> KlineResult:
+    if fields is None:
+        return result
+    allowed = set(fields)
+    bars = [
+        bar.model_copy(update={key: None for key in _KLINE_FIELDS if key not in allowed})
+        for bar in result.bars
+    ]
+    return result.model_copy(update={"bars": bars})
