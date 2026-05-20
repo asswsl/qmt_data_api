@@ -2,6 +2,111 @@
 
 本文档记录已经完整实现并验证通过的功能。每次完成一个功能后，都要追加日期、功能名称、实现范围、验证结果；如果功能包含 API 接口，必须写清楚接口格式。
 
+## 2026-05-20
+
+### 行情快照 WebSocket 实时推送
+
+实现范围：
+
+- 已实现 `WS /ws/v1/market/snapshot`，用于同一局域网内非 QMT 主机持续接收 QMT 主机的行情快照。
+- 已支持通过查询参数 `api_key` 鉴权，兼容浏览器原生 WebSocket；同时支持 `X-API-Key` 请求头，便于 Python、Node.js 等客户端调用。
+- 已支持订阅参数 `symbols`、`fields`、`source`、`interval_seconds`。
+- 已复用现有 `get_market_snapshots()`，因此具备证券代码校验、字段裁剪、快照缓存、`source=auto|cache|qmt` 和 QMT 回源能力。
+- 已实现连接管理、订阅参数解析、统一成功消息和统一错误消息。
+- 当前版本采用轮询推送模型：连接建立后立即发送首条快照，之后按 `interval_seconds` 间隔继续推送；非可重试业务错误会发送错误消息并关闭连接。
+
+验证结果：
+
+- `python -m compileall -q src tests` 通过。
+- `python -m pytest tests/integration/test_api.py` 通过，24 项集成测试通过。
+- 已覆盖缺少 API Key 时返回 WebSocket 错误消息。
+- 已覆盖携带 API Key 成功订阅并收到首条 `market_snapshot` 消息。
+
+接口格式：
+
+```http
+WS /ws/v1/market/snapshot?symbols=600519.SH,000001.SZ&fields=last_price,volume&source=auto&interval_seconds=3&api_key=<api-key>
+```
+
+鉴权要求：
+
+- 推荐浏览器或轻量客户端使用查询参数：`api_key=<api-key>`。
+- 也支持请求头：`X-API-Key: <api-key>`。
+- 当 `API_KEY_ENABLED=false` 时可关闭鉴权；生产或局域网共享场景不建议关闭。
+
+请求参数：
+
+```text
+symbols           必填，逗号分隔的证券代码列表，例如 600519.SH,000001.SZ
+fields            可选，逗号分隔的字段列表，例如 last_price,volume,bid1,ask1
+source            可选，数据来源，auto | cache | qmt，默认 auto
+interval_seconds  可选，推送间隔秒数，默认 3；小于 0.2 时会按 0.2 处理
+api_key           可选，API Key；当请求头无法携带 X-API-Key 时使用
+```
+
+成功推送消息：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_ws_xxx",
+  "type": "market_snapshot",
+  "data": [
+    {
+      "symbol": "600519.SH",
+      "quote_time": "2026-05-20T10:00:00+08:00",
+      "last_price": 1688.88,
+      "volume": 1000.0
+    }
+  ],
+  "meta": {
+    "server_time": "2026-05-20T10:00:00+08:00",
+    "missing_symbols": [],
+    "fields": ["last_price", "volume"],
+    "source": "qmt",
+    "cache": "miss",
+    "interval_seconds": 3.0
+  }
+}
+```
+
+错误推送消息：
+
+```json
+{
+  "success": false,
+  "code": "AUTH_MISSING_API_KEY",
+  "message": "缺少 API Key",
+  "request_id": "req_ws_xxx",
+  "type": "error",
+  "data": null,
+  "meta": {
+    "retryable": false,
+    "server_time": "2026-05-20T10:00:00+08:00"
+  }
+}
+```
+
+Python 客户端示例：
+
+```python
+import websocket
+
+url = (
+    "ws://192.168.1.105:8000/ws/v1/market/snapshot"
+    "?symbols=600519.SH,000001.SZ"
+    "&fields=last_price,volume"
+    "&interval_seconds=3"
+    "&api_key=qmt-lan-2026"
+)
+
+ws = websocket.create_connection(url)
+while True:
+    print(ws.recv())
+```
+
 ## 2026-05-19
 
 ### 可投入使用 API 能力集
