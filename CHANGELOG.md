@@ -2,6 +2,20 @@
 
 本文档记录本仓库的重要变更。每次 agent 完成变更后，都应同步更新此文件。
 
+## 2026-05-20
+
+### Changed
+
+- 新增历史 K 线缓存预热任务与接口 `POST /api/v1/cache/warmup/kline`，支持按证券列表、周期列表、时间范围、复权类型和条数主动回源或复用缓存，提前生成 K 线文件缓存。
+- 新增最近一次 K 线缓存预热结果查询接口 `GET /api/v1/cache/warmup/kline/status`，用于查看预热状态、成功数量、缓存命中数量、刷新数量、失败数量和逐项结果。
+- 缓存状态接口能力列表新增 `kline_cache_warmup`，标识当前服务已支持历史 K 线缓存预热。
+
+### Validation
+
+- 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
+- 已执行 `python -m pytest tests/unit/test_warmup_cache.py tests/integration/test_api.py`，缓存预热任务与接口测试通过。
+- 已执行 `python -m pytest`，42 项全量测试通过。
+
 ## 2026-05-19
 
 ### Changed

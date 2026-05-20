@@ -331,6 +331,18 @@ def test_clear_kline_cache_requires_api_key(monkeypatch) -> None:
     assert response.json()["code"] == ErrorCode.AUTH_MISSING_API_KEY
 
 
+def test_kline_warmup_requires_api_key(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    response = client.post(
+        "/api/v1/cache/warmup/kline",
+        json={"symbols": ["600519.SH"], "start": "20240101", "end": "20240110"},
+    )
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    assert response.json()["code"] == ErrorCode.AUTH_MISSING_API_KEY
+
+
 def test_market_snapshot_post_returns_data(monkeypatch) -> None:
     client = _build_client(monkeypatch)
 
@@ -609,6 +621,53 @@ def test_clear_kline_cache_removes_file_cache(monkeypatch, tmp_path) -> None:
     ][0]
     assert kline_layer["item_count"] == 0
     assert kline_layer["evicted_count"] >= 1
+
+
+def test_kline_warmup_runs_and_reports_status(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path / "cache"))
+    clear_settings_cache()
+    client = _build_client(monkeypatch)
+    calls = []
+
+    def _fake_fetch(
+        symbol: str,
+        period: str,
+        start_time: str,
+        end_time: str,
+        adjust: str,
+        limit: int | None,
+    ):
+        calls.append((symbol, period, start_time, end_time, adjust, limit))
+        return [KlineBar(trade_date="2024-01-02", close=1685.01)]
+
+    monkeypatch.setattr("qmt_data_api.domain.market.service.fetch_xtdata_klines", _fake_fetch)
+
+    response = client.post(
+        "/api/v1/cache/warmup/kline",
+        headers={"X-API-Key": "secret-key"},
+        json={
+            "symbols": ["600519.SH", "000001.SZ"],
+            "periods": ["1d"],
+            "start": "20240101",
+            "end": "20240110",
+            "limit": 5,
+        },
+    )
+    status_response = client.get(
+        "/api/v1/cache/warmup/kline/status",
+        headers={"X-API-Key": "secret-key"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    payload = response.json()
+    assert payload["data"]["status"] == "ok"
+    assert payload["data"]["requested_count"] == 2
+    assert payload["data"]["success_count"] == 2
+    assert payload["data"]["refreshed_count"] == 2
+    assert len(calls) == 2
+    assert status_response.status_code == HTTPStatus.OK
+    assert status_response.json()["data"]["status"] == "ok"
+    assert status_response.json()["data"]["last_result"]["requested_count"] == 2
 
 
 def test_rate_limit_blocks_excess_requests(monkeypatch) -> None:
