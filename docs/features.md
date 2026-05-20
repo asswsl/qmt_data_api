@@ -2,6 +2,123 @@
 
 本文档记录已经完整实现并验证通过的功能。每次完成一个功能后，都要追加日期、功能名称、实现范围、验证结果；如果功能包含 API 接口，必须写清楚接口格式。
 
+## 2026-05-20
+
+### 历史 K 线缓存预热
+
+实现范围：
+
+- 已实现同步触发的历史 K 线缓存预热任务。
+- 已支持按证券列表、周期列表、时间范围、复权类型和条数批量预热。
+- 已支持 `force_refresh=false` 时优先复用现有文件缓存，缺失时自动回源 QMT。
+- 已支持 `force_refresh=true` 时强制回源 QMT 并刷新文件缓存。
+- 已记录最近一次预热结果，便于客户端查询预热状态。
+- 已在结果中返回逐项预热状态、数据来源、缓存状态、K 线条数和失败原因。
+
+验证结果：
+
+- `python -m compileall -q src tests` 通过。
+- `python -m pytest tests/unit/test_warmup_cache.py tests/integration/test_api.py` 通过。
+- `python -m pytest` 通过，42 项全量测试通过。
+
+触发预热接口：
+
+```http
+POST /api/v1/cache/warmup/kline
+```
+
+鉴权要求：
+
+- 需要请求头：`X-API-Key: <api-key>`。
+
+请求体：
+
+```json
+{
+  "symbols": ["600519.SH", "000001.SZ"],
+  "periods": ["1d", "1m"],
+  "start": "20240101",
+  "end": "20240110",
+  "adjust": "none",
+  "limit": 5,
+  "force_refresh": false
+}
+```
+
+参数说明：
+
+```text
+symbols        必填，证券代码列表
+periods        可选，K 线周期列表，默认 ["1d"]
+start          必填，开始日期，支持 YYYYMMDD 或 YYYY-MM-DD
+end            必填，结束日期，支持 YYYYMMDD 或 YYYY-MM-DD
+adjust         可选，none | front | back，默认 none
+limit          可选，最大返回条数
+force_refresh  可选，true 时强制回源 QMT 刷新缓存，false 时优先复用缓存
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": {
+    "status": "ok",
+    "started_at": "2026-05-20T10:00:00+08:00",
+    "finished_at": "2026-05-20T10:00:01+08:00",
+    "requested_count": 2,
+    "success_count": 2,
+    "cached_count": 0,
+    "refreshed_count": 2,
+    "failed_count": 0,
+    "items": [
+      {
+        "symbol": "600519.SH",
+        "period": "1d",
+        "status": "ok",
+        "source": "qmt",
+        "cache": "miss",
+        "count": 5
+      }
+    ]
+  },
+  "meta": {
+    "server_time": "2026-05-20T10:00:01+08:00"
+  }
+}
+```
+
+最近一次预热状态接口：
+
+```http
+GET /api/v1/cache/warmup/kline/status
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "success",
+  "request_id": "req_xxx",
+  "data": {
+    "status": "ok",
+    "last_result": {
+      "requested_count": 2,
+      "success_count": 2,
+      "failed_count": 0
+    }
+  },
+  "meta": {
+    "server_time": "2026-05-20T10:00:01+08:00"
+  }
+}
+```
+
 ## 2026-05-19
 
 ### 可投入使用 API 能力集
