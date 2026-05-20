@@ -291,6 +291,59 @@ def test_market_snapshot_get_returns_data(monkeypatch) -> None:
     assert payload["meta"]["cache"] == "miss"
 
 
+def test_websocket_snapshot_requires_api_key(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    with client.websocket_connect("/ws/v1/market/snapshot?symbols=600519.SH") as websocket:
+        payload = websocket.receive_json()
+
+    assert payload["success"] is False
+    assert payload["type"] == "error"
+    assert payload["code"] == ErrorCode.AUTH_MISSING_API_KEY
+
+
+def test_websocket_snapshot_stream_returns_first_message(monkeypatch) -> None:
+    client = _build_client(monkeypatch)
+
+    def _fake_snapshots(
+        symbols: list[str],
+        fields: list[str] | None = None,
+        source: str = "auto",
+    ) -> SnapshotResult:
+        assert symbols == ["600519.SH", "000001.SZ"]
+        assert fields == ["last_price", "volume"]
+        assert source == "auto"
+        return SnapshotResult(
+            items=[SnapshotItem(symbol="600519.SH", last_price=1688.88, volume=1000)],
+            missing_symbols=["000001.SZ"],
+            fields=fields,
+            source="qmt",
+            cache="miss",
+        )
+
+    monkeypatch.setattr("qmt_data_api.api.websocket.router.get_market_snapshots", _fake_snapshots)
+
+    url = (
+        "/ws/v1/market/snapshot"
+        "?symbols=600519.SH,000001.SZ"
+        "&fields=last_price,volume"
+        "&api_key=secret-key"
+        "&interval_seconds=1"
+    )
+    with client.websocket_connect(url, headers={"X-Request-ID": "req_ws_test"}) as websocket:
+        payload = websocket.receive_json()
+        websocket.close()
+
+    assert payload["success"] is True
+    assert payload["type"] == "market_snapshot"
+    assert payload["request_id"] == "req_ws_test"
+    assert payload["data"] == [{"symbol": "600519.SH", "last_price": 1688.88, "volume": 1000.0}]
+    assert payload["meta"]["missing_symbols"] == ["000001.SZ"]
+    assert payload["meta"]["fields"] == ["last_price", "volume"]
+    assert payload["meta"]["source"] == "qmt"
+    assert payload["meta"]["cache"] == "miss"
+
+
 def test_cache_status_reports_snapshot_cache_stats(monkeypatch) -> None:
     get_snapshot_cache().clear()
     monkeypatch.setenv("MARKET_SNAPSHOT_CACHE_TTL_SECONDS", "30")

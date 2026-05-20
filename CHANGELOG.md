@@ -2,6 +2,20 @@
 
 本文档记录本仓库的重要变更。每次 agent 完成变更后，都应同步更新此文件。
 
+## 2026-05-20
+
+### Added
+
+- 新增行情快照 WebSocket 实时推送接口 `WS /ws/v1/market/snapshot`，支持通过 `api_key` 查询参数或 `X-API-Key` 请求头鉴权，远程客户端可按固定间隔接收 QMT 主机行情快照。
+- WebSocket 快照推送支持 `symbols`、`fields`、`source` 和 `interval_seconds` 参数，复用现有快照领域服务、字段裁剪、缓存和 QMT 回源能力。
+- 新增 WebSocket 连接管理、订阅参数解析和推送消息构造模块，并在 FastAPI 应用中注册 WebSocket 路由。
+- 新增 WebSocket 集成测试，覆盖缺少 API Key 的错误消息和成功订阅后收到首条行情快照消息。
+
+### Validation
+
+- 已执行 `python -m compileall -q src tests`，Python 语法检查通过。
+- 已执行 `python -m pytest tests/integration/test_api.py`，24 项集成测试通过。
+
 ## 2026-05-19
 
 ### Changed

@@ -4,6 +4,7 @@
 from fastapi import FastAPI
 
 from qmt_data_api.api.router import api_router
+from qmt_data_api.api.websocket.router import router as websocket_router
 from qmt_data_api.core.constants import APP_NAME, APP_VERSION
 from qmt_data_api.middleware.access_log import AccessLogMiddleware
 from qmt_data_api.middleware.error_handler import register_exception_handlers
@@ -18,4 +19,5 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
     app.include_router(api_router)
+    app.include_router(websocket_router)
     return app
